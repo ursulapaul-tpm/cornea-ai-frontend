@@ -1,12 +1,14 @@
 'use client'
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Blueprint } from '../types'
+import { generatePRDPdf } from '../utils/generatePDF'
 
 interface ResultsProps {
   blueprint: Blueprint
   idea: string
   onNewIdea: () => void
   onViewGraph: () => void
+  onRegenerate: (newIdea: string) => void
 }
 
 const TABS = ['Overview', 'Users', 'Features', 'Architecture', 'PRD']
@@ -14,7 +16,6 @@ const TABS = ['Overview', 'Users', 'Features', 'Architecture', 'PRD']
 const METHOD_COLORS: Record<string, string> = {
   GET: '#3dd4a0', POST: '#7aa8f8', PUT: '#f0a860', PATCH: '#f0a860', DELETE: '#f07878',
 }
-
 const BADGE_COLORS: Record<string, { bg: string; color: string }> = {
   Core:    { bg: 'rgba(74,124,240,0.15)',  color: '#7aa8f8' },
   Admin:   { bg: 'rgba(224,128,32,0.15)',  color: '#f0a860' },
@@ -22,51 +23,113 @@ const BADGE_COLORS: Record<string, { bg: string; color: string }> = {
   System:  { bg: 'rgba(124,92,240,0.15)',  color: '#a88cf8' },
 }
 
-function SLabel({ children }: { children: string }) {
-  return (
-    <p className="text-[10px] uppercase tracking-[0.16em] font-semibold mb-3 mt-6 first:mt-0"
-      style={{ color: 'rgba(255,255,255,0.25)' }}>
-      {children}
-    </p>
-  )
-}
-
-function Tag({ children, color = '#7aa8f8', bg = 'rgba(74,124,240,0.1)', border = 'rgba(74,124,240,0.2)' }: {
-  children: string; color?: string; bg?: string; border?: string
+// ── Inline editable text ──────────────────────────────────────────
+function EditableText({ value, onChange, multiline = false, className = '' }: {
+  value: string; onChange: (v: string) => void; multiline?: boolean; className?: string
 }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value)
+  const commit = () => { onChange(draft); setEditing(false) }
+  if (editing) {
+    return multiline
+      ? <textarea autoFocus className={`w-full bg-transparent rounded-lg px-3 py-2 outline-none resize-none ${className}`}
+          style={{ border: '1px solid rgba(74,124,240,0.5)', color: 'rgba(255,255,255,0.85)', minHeight: 80 }}
+          value={draft} onChange={e => setDraft(e.target.value)}
+          onBlur={commit} onKeyDown={e => e.key === 'Escape' && setEditing(false)} />
+      : <input autoFocus className={`w-full bg-transparent rounded-lg px-3 py-2 outline-none ${className}`}
+          style={{ border: '1px solid rgba(74,124,240,0.5)', color: 'rgba(255,255,255,0.85)' }}
+          value={draft} onChange={e => setDraft(e.target.value)}
+          onBlur={commit} onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false) }} />
+  }
   return (
-    <span className="text-[12px] px-3 py-1 rounded-full inline-block"
-      style={{ background: bg, border: `1px solid ${border}`, color }}>
-      {children}
+    <span className={`cursor-pointer group relative ${className}`} onClick={() => { setDraft(value); setEditing(true) }} title="Click to edit">
+      {value}
+      <span className="ml-1 opacity-0 group-hover:opacity-60 transition-opacity text-[10px]" style={{ color: '#7aa8f8' }}>✎</span>
     </span>
   )
 }
 
+// ── Editable list ─────────────────────────────────────────────────
+function EditableList({ items, onChange, color = '#7aa8f8', bg = 'rgba(74,124,240,0.08)', border = 'rgba(74,124,240,0.2)' }: {
+  items: string[]; onChange: (v: string[]) => void; color?: string; bg?: string; border?: string
+}) {
+  const [adding, setAdding] = useState(false)
+  const [draft, setDraft] = useState('')
+  const add = () => { if (draft.trim()) onChange([...items, draft.trim()]); setDraft(''); setAdding(false) }
+  const remove = (i: number) => onChange(items.filter((_, idx) => idx !== i))
+  const edit = (i: number, val: string) => onChange(items.map((item, idx) => idx === i ? val : item))
+
+  return (
+    <div className="space-y-2">
+      {items.map((item, i) => (
+        <div key={i} className="group flex items-start gap-2 p-2.5 rounded-xl"
+          style={{ background: bg, border: `1px solid ${border}` }}>
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5"
+            style={{ background: `${color}22`, color }}>{String(i+1).padStart(2,'0')}</span>
+          <EditableText value={item} onChange={v => edit(i, v)} className="flex-1 text-[13px] leading-relaxed" />
+          <button onClick={() => remove(i)}
+            className="opacity-0 group-hover:opacity-60 hover:opacity-100 flex-shrink-0 mt-0.5 transition-opacity text-[11px]"
+            style={{ color: '#f07878' }}>✕</button>
+        </div>
+      ))}
+      {adding
+        ? <input autoFocus className="w-full px-3 py-2 rounded-xl text-[13px] outline-none"
+            style={{ background: bg, border: `1px dashed ${color}`, color: 'rgba(255,255,255,0.75)' }}
+            placeholder="Type and press Enter" value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') add(); if (e.key === 'Escape') setAdding(false) }}
+            onBlur={add} />
+        : <button onClick={() => setAdding(true)}
+            className="w-full text-left text-[12px] px-3 py-2 rounded-xl transition-all"
+            style={{ border: `1px dashed ${color}55`, color: `${color}88` }}>
+            + Add item
+          </button>
+      }
+    </div>
+  )
+}
+
+function SLabel({ children }: { children: string }) {
+  return <p className="text-[10px] uppercase tracking-[0.16em] font-semibold mb-3 mt-6 first:mt-0" style={{ color: 'rgba(255,255,255,0.25)' }}>{children}</p>
+}
+
 function Card({ children, accent }: { children: React.ReactNode; accent?: string }) {
   return (
-    <div className="p-4 rounded-2xl"
-      style={{
-        background: accent ? `${accent}08` : 'rgba(255,255,255,0.03)',
-        border: `1px solid ${accent ? `${accent}20` : 'rgba(255,255,255,0.07)'}`,
-      }}>
+    <div className="p-4 rounded-2xl" style={{ background: accent ? `${accent}08` : 'rgba(255,255,255,0.03)', border: `1px solid ${accent ? `${accent}20` : 'rgba(255,255,255,0.07)'}` }}>
       {children}
     </div>
   )
 }
 
-export function Results({ blueprint, idea, onNewIdea, onViewGraph }: ResultsProps) {
+export function Results({ blueprint: initial, idea, onNewIdea, onViewGraph, onRegenerate }: ResultsProps) {
+  const [bp, setBp] = useState<Blueprint>(initial)
   const [activeTab, setActiveTab] = useState(0)
+  const [showRegenerate, setShowRegenerate] = useState(false)
+  const [extraContext, setExtraContext] = useState('')
+  const [prdGenerating, setPrdGenerating] = useState(false)
+
+  const update = useCallback((field: keyof Blueprint, value: any) => setBp(prev => ({ ...prev, [field]: value })), [])
+
+  const updateFeature = useCallback((i: number, field: string, value: string) =>
+    setBp(prev => ({ ...prev, feature_breakdown: prev.feature_breakdown.map((f, idx) => idx === i ? { ...f, [field]: value } : f) })), [])
+
+  const updateUser = useCallback((i: number, field: string, value: string) =>
+    setBp(prev => ({ ...prev, users: prev.users.map((u, idx) => idx === i ? { ...u, [field]: value } : u) })), [])
+
+  const addUser = useCallback(() =>
+    setBp(prev => ({ ...prev, users: [...prev.users, { name: 'New User', role: 'Role', description: 'Description' }] })), [])
+
+  const removeUser = useCallback((i: number) =>
+    setBp(prev => ({ ...prev, users: prev.users.filter((_, idx) => idx !== i) })), [])
 
   const handleExportMarkdown = () => {
     const lines = [
-      `# ${idea}`, '',
-      '## Users', ...(blueprint.users||[]).map(u => `- **${u.name}** (${u.role}): ${u.description}`), '',
-      '## Business Goals', ...(blueprint.business_goals||[]).map(g => `- ${g}`), '',
-      '## Jobs To Be Done', ...(blueprint.jobs_to_be_done||[]).map((j,i) => `${i+1}. ${j}`), '',
-      '## Features', ...(blueprint.feature_breakdown||[]).map(f => `### ${f.feature}\n${f.description}`), '',
-      '## Architecture', ...(blueprint.services||[]).map(s => `### ${s.name}\n${s.description}\n${(s.apis||[]).map(a=>`- ${a.method} ${a.route}`).join('\n')}`), '',
-      '## PRD Summary', blueprint.prd_summary||'', '',
-      '## System Explanation', blueprint.system_explanation||'',
+      `# ${idea}`, '', '## Users', ...(bp.users||[]).map(u => `- **${u.name}** (${u.role}): ${u.description}`), '',
+      '## Business Goals', ...(bp.business_goals||[]).map(g => `- ${g}`), '',
+      '## Jobs To Be Done', ...(bp.jobs_to_be_done||[]).map((j,i) => `${i+1}. ${j}`), '',
+      '## Features', ...(bp.feature_breakdown||[]).map(f => `### ${f.feature}\n${f.description}`), '',
+      '## Architecture', ...(bp.services||[]).map(s => `### ${s.name}\n${s.description}\n${(s.apis||[]).map(a=>`- ${a.method} ${a.route}`).join('\n')}`), '',
+      '## PRD Summary', bp.prd_summary||'', '', '## System Explanation', bp.system_explanation||'',
     ]
     const blob = new Blob([lines.join('\n')], { type: 'text/markdown' })
     const url = URL.createObjectURL(blob)
@@ -74,802 +137,19 @@ export function Results({ blueprint, idea, onNewIdea, onViewGraph }: ResultsProp
     URL.revokeObjectURL(url)
   }
 
-  const handleExportPDF = () => {
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${idea}</title>
-<style>
-body{font-family:-apple-system,sans-serif;color:#1a1a2e;max-width:800px;margin:0 auto;padding:48px;line-height:1.7}
-h1{font-size:28px;font-weight:700;margin-bottom:8px}
-h2{font-size:14px;font-weight:600;color:#4a7cf0;text-transform:uppercase;letter-spacing:0.1em;margin-top:32px;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #eef}
-h3{font-size:14px;font-weight:600;margin-top:14px;margin-bottom:4px}
-p,li{font-size:13px;color:#333}
-ul,ol{padding-left:20px}
-.tag{display:inline-block;font-size:11px;padding:2px 10px;border-radius:20px;background:#eef3ff;color:#4a7cf0;border:1px solid #c5d8fc;margin:2px}
-.feat{background:#fafafa;border:1px solid #eee;border-radius:10px;padding:12px 14px;margin-bottom:8px}
-.api{font-family:monospace;font-size:11px;padding:4px 8px;background:#f5f5ff;border-radius:4px;margin:2px 0;display:block}
-.footer{margin-top:48px;font-size:11px;color:#aaa;text-align:center;border-top:1px solid #eee;padding-top:16px}
-</style></head><body>
-<h1>${idea}</h1>
-<p style="color:#666">${blueprint.prd_summary||''}</p>
-<h2>Users</h2>
-${(blueprint.users||[]).map(u=>`<div class="feat"><strong>${u.name}</strong> — ${u.role}<br/><small style="color:#666">${u.description}</small></div>`).join('')}
-<h2>Business Goals</h2>
-<ul>${(blueprint.business_goals||[]).map(g=>`<li>${g}</li>`).join('')}</ul>
-<h2>Jobs To Be Done</h2>
-<ol>${(blueprint.jobs_to_be_done||[]).map(j=>`<li>${j}</li>`).join('')}</ol>
-<h2>Features</h2>
-${(blueprint.feature_breakdown||[]).map(f=>`<div class="feat"><strong>${f.feature}</strong> <span class="tag">${f.badge}</span><p>${f.description}</p></div>`).join('')}
-<h2>System Architecture</h2>
-${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.description}</p>${(s.apis||[]).map(a=>`<code class="api">${a.method} ${a.route} — ${a.purpose}</code>`).join('')}</div>`).join('')}
-<h2>System Explanation</h2>
-<p>${blueprint.system_explanation||''}</p>
-<div class="footer">Generated by cornea.ai</div>
-</body></html>`
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const win = window.open(url, '_blank')
-    if (win) win.onload = () => setTimeout(() => { win.print(); URL.revokeObjectURL(url) }, 400)
+  const handleExportPDF = async () => {
+    setPrdGenerating(true)
+    try { await generatePRDPdf(bp, idea) } finally { setPrdGenerating(false) }
   }
 
-
-  const handleGeneratePRD = () => {
-    const b = blueprint
-    const now = new Date()
-    const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
-    const version = '1.0'
-
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>PRD — ${idea}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
-  :root {
-    --ink: #0a0e1a;
-    --ink-2: #374151;
-    --ink-3: #6b7280;
-    --ink-4: #9ca3af;
-    --rule: #e5e7eb;
-    --bg: #ffffff;
-    --bg-2: #f9fafb;
-    --bg-3: #f3f4f6;
-    --accent: #1a56db;
-    --accent-light: #eff6ff;
-    --accent-mid: #dbeafe;
-    --green: #047857;
-    --green-light: #ecfdf5;
-    --amber: #b45309;
-    --amber-light: #fffbeb;
-    --purple: #6d28d9;
-    --purple-light: #f5f3ff;
-    --red: #b91c1c;
-    --red-light: #fef2f2;
+  const handleGeneratePRD = async () => {
+    setPrdGenerating(true)
+    try { await generatePRDPdf(bp, idea) } finally { setPrdGenerating(false) }
   }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    font-family: 'Inter', -apple-system, sans-serif;
-    font-size: 13px;
-    line-height: 1.6;
-    color: var(--ink);
-    background: var(--bg);
-    -webkit-font-smoothing: antialiased;
-  }
-
-  /* ── LAYOUT ─────────────────────────────────────── */
-  .wrap { max-width: 860px; margin: 0 auto; }
-
-  /* ── COVER ──────────────────────────────────────── */
-  .cover {
-    padding: 0;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    page-break-after: always;
-  }
-  .cover-bar {
-    height: 6px;
-    background: linear-gradient(90deg, #1a56db 0%, #6d28d9 50%, #047857 100%);
-  }
-  .cover-body {
-    flex: 1;
-    padding: 72px 64px 48px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
-  .cover-eyebrow {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 32px;
-  }
-  .cover-title {
-    font-size: 42px;
-    font-weight: 800;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-    color: var(--ink);
-    margin-bottom: 20px;
-    max-width: 600px;
-  }
-  .cover-summary {
-    font-size: 16px;
-    font-weight: 400;
-    line-height: 1.75;
-    color: var(--ink-2);
-    max-width: 560px;
-    margin-bottom: 48px;
-  }
-  .cover-divider {
-    width: 48px;
-    height: 3px;
-    background: var(--accent);
-    border-radius: 2px;
-    margin-bottom: 48px;
-  }
-  .cover-stats {
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 0;
-    border: 1px solid var(--rule);
-    border-radius: 12px;
-    overflow: hidden;
-    margin-bottom: 48px;
-  }
-  .cover-stat {
-    padding: 18px 16px;
-    border-right: 1px solid var(--rule);
-    text-align: center;
-  }
-  .cover-stat:last-child { border-right: none; }
-  .cover-stat-num {
-    font-size: 24px;
-    font-weight: 800;
-    color: var(--ink);
-    display: block;
-    margin-bottom: 2px;
-    letter-spacing: -0.02em;
-  }
-  .cover-stat-label {
-    font-size: 10px;
-    color: var(--ink-4);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-  .cover-meta {
-    display: flex;
-    gap: 32px;
-    padding-top: 24px;
-    border-top: 1px solid var(--rule);
-  }
-  .cover-meta-item { display: flex; flex-direction: column; gap: 2px; }
-  .cover-meta-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-4); font-weight: 600; }
-  .cover-meta-val { font-size: 13px; font-weight: 600; color: var(--ink-2); }
-
-  /* ── CONTENT PAGES ──────────────────────────────── */
-  .content { padding: 64px; }
-
-  /* ── SECTION ────────────────────────────────────── */
-  .section { margin-bottom: 56px; }
-  .section:last-child { margin-bottom: 0; }
-
-  .section-header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 24px;
-    padding-bottom: 14px;
-    border-bottom: 1.5px solid var(--rule);
-  }
-  .section-num {
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: var(--accent);
-    color: #fff;
-    font-size: 12px;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .section-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--ink);
-    letter-spacing: -0.01em;
-  }
-
-  h3 {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--ink);
-    margin-top: 20px;
-    margin-bottom: 8px;
-  }
-
-  p {
-    font-size: 13px;
-    color: var(--ink-2);
-    line-height: 1.75;
-    margin-bottom: 12px;
-  }
-
-  /* ── CALLOUT ────────────────────────────────────── */
-  .callout {
-    border-radius: 10px;
-    padding: 18px 20px;
-    margin-bottom: 16px;
-  }
-  .callout-blue { background: var(--accent-light); border-left: 3px solid var(--accent); }
-  .callout-amber { background: var(--amber-light); border-left: 3px solid #f59e0b; }
-  .callout p { margin-bottom: 0; }
-  .callout-blue p { color: #1e3a8a; }
-  .callout-amber p { color: #78350f; }
-
-  /* ── PERSONAS ───────────────────────────────────── */
-  .persona-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .persona {
-    border: 1px solid var(--rule);
-    border-radius: 12px;
-    padding: 18px;
-    background: var(--bg-2);
-  }
-  .persona-top { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-  .persona-avatar {
-    width: 40px; height: 40px;
-    border-radius: 50%;
-    background: var(--accent-mid);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px;
-    flex-shrink: 0;
-  }
-  .persona-name { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 1px; }
-  .persona-role { font-size: 11px; color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
-  .persona-desc { font-size: 12px; color: var(--ink-3); line-height: 1.6; }
-
-  /* ── GOALS ──────────────────────────────────────── */
-  .goal-list { display: flex; flex-direction: column; gap: 8px; }
-  .goal-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 12px 16px;
-    background: var(--bg-2);
-    border: 1px solid var(--rule);
-    border-radius: 10px;
-  }
-  .goal-id { font-size: 11px; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace; flex-shrink: 0; margin-top: 1px; }
-  .goal-text { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
-
-  /* ── TABLES ─────────────────────────────────────── */
-  .table-wrap { border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
-  table { width: 100%; border-collapse: collapse; }
-  thead { background: var(--bg-3); }
-  th {
-    padding: 11px 14px;
-    text-align: left;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-3);
-    border-bottom: 1px solid var(--rule);
-  }
-  td {
-    padding: 12px 14px;
-    font-size: 12px;
-    color: var(--ink-2);
-    border-bottom: 1px solid var(--rule);
-    vertical-align: top;
-  }
-  tr:last-child td { border-bottom: none; }
-  .mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 500; }
-  .id-cell { color: var(--accent); font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; white-space: nowrap; }
-  .name-cell { font-weight: 600; color: var(--ink); white-space: nowrap; }
-
-  /* ── BADGES ─────────────────────────────────────── */
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 3px 9px;
-    border-radius: 20px;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
-  }
-  .badge-core    { background: var(--accent-light); color: var(--accent); }
-  .badge-premium { background: var(--green-light);  color: var(--green);  }
-  .badge-admin   { background: var(--amber-light);  color: var(--amber);  }
-  .badge-system  { background: var(--purple-light); color: var(--purple); }
-  .badge-high    { background: #fef2f2; color: #b91c1c; }
-  .badge-medium  { background: #fffbeb; color: #b45309; }
-  .badge-low     { background: #f0fdf4; color: #15803d; }
-
-  /* ── SERVICES ───────────────────────────────────── */
-  .service-block {
-    border: 1px solid var(--rule);
-    border-radius: 12px;
-    margin-bottom: 14px;
-    overflow: hidden;
-  }
-  .service-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 18px;
-    background: var(--bg-2);
-    border-bottom: 1px solid var(--rule);
-  }
-  .service-name { font-size: 13px; font-weight: 700; color: var(--ink); }
-  .service-group {
-    font-size: 10px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.1em;
-    color: var(--purple); background: var(--purple-light);
-    padding: 3px 10px; border-radius: 20px;
-  }
-  .service-body { padding: 14px 18px; }
-  .service-desc { font-size: 12px; color: var(--ink-3); margin-bottom: 12px; }
-  .api-list { display: flex; flex-direction: column; gap: 5px; }
-  .api-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 10px;
-    background: var(--bg-3);
-    border-radius: 7px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-  }
-  .api-method { font-weight: 700; min-width: 50px; }
-  .api-get    { color: #047857; }
-  .api-post   { color: #1a56db; }
-  .api-put    { color: #b45309; }
-  .api-patch  { color: #b45309; }
-  .api-delete { color: #b91c1c; }
-  .api-route  { color: var(--ink); flex-shrink: 0; }
-  .api-purpose { color: var(--ink-4); font-family: 'Inter', sans-serif; font-size: 11px; }
-  .dep-list { margin-top: 10px; font-size: 11px; color: var(--ink-4); }
-  .dep-list strong { color: var(--ink-3); }
-
-  /* ── ENTITIES ───────────────────────────────────── */
-  .entity-block {
-    border: 1px solid var(--rule);
-    border-radius: 10px;
-    margin-bottom: 10px;
-    overflow: hidden;
-  }
-  .entity-head {
-    padding: 10px 16px;
-    background: var(--green-light);
-    border-bottom: 1px solid #d1fae5;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .entity-name { font-size: 13px; font-weight: 700; color: var(--green); }
-  .entity-desc { font-size: 11px; color: var(--ink-3); }
-  .entity-body { padding: 10px 16px; }
-  .field-list { display: flex; flex-wrap: wrap; gap: 6px; }
-  .field-tag {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px; font-weight: 500;
-    padding: 3px 8px;
-    background: var(--bg-3);
-    border: 1px solid var(--rule);
-    border-radius: 5px;
-    color: var(--ink-2);
-  }
-
-  /* ── INTEGRATIONS ───────────────────────────────── */
-  .int-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .int-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 14px;
-    border: 1px solid var(--rule);
-    border-radius: 10px;
-    background: var(--bg-2);
-  }
-  .int-icon {
-    width: 32px; height: 32px;
-    border-radius: 8px;
-    background: var(--purple-light);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 15px; flex-shrink: 0;
-  }
-  .int-name { font-size: 12px; font-weight: 700; color: var(--ink); margin-bottom: 2px; }
-  .int-purpose { font-size: 11px; color: var(--ink-3); line-height: 1.5; }
-  .int-type { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--purple); margin-top: 4px; }
-
-  /* ── OOS ────────────────────────────────────────── */
-  .oos-list { display: flex; flex-direction: column; gap: 7px; }
-  .oos-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 11px 14px;
-    background: var(--red-light);
-    border: 1px solid #fecaca;
-    border-radius: 8px;
-    font-size: 12px;
-    color: var(--red);
-  }
-  .oos-x { font-weight: 800; font-size: 13px; flex-shrink: 0; }
-
-  /* ── DATA LAYER ─────────────────────────────────── */
-  .data-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
-  .data-card {
-    padding: 16px;
-    border: 1px solid var(--rule);
-    border-radius: 10px;
-    background: var(--bg-2);
-    text-align: center;
-  }
-  .data-val { font-size: 16px; font-weight: 800; color: var(--green); margin-bottom: 3px; }
-  .data-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-4); font-weight: 600; }
-
-  /* ── FOOTER ─────────────────────────────────────── */
-  .footer {
-    margin-top: 64px;
-    padding: 20px 64px;
-    border-top: 1px solid var(--rule);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 11px;
-    color: var(--ink-4);
-  }
-  .footer-logo { font-weight: 700; color: var(--accent); letter-spacing: -0.01em; }
-
-  @media print {
-    body { font-size: 12px; }
-    .cover { min-height: auto; padding-bottom: 48px; }
-    .content { padding: 48px 64px; }
-    .section { margin-bottom: 40px; }
-  }
-</style>
-</head>
-<body>
-
-<!-- COVER PAGE -->
-<div class="cover">
-  <div class="cover-bar"></div>
-  <div class="cover-body">
-    <div>
-      <div class="cover-eyebrow">Product Requirements Document</div>
-      <div class="cover-title">${idea}</div>
-      <div class="cover-divider"></div>
-      <div class="cover-summary">${b.prd_summary || ''}</div>
-
-      <div class="cover-stats">
-        <div class="cover-stat">
-          <span class="cover-stat-num">${(b.users||[]).length}</span>
-          <span class="cover-stat-label">User types</span>
-        </div>
-        <div class="cover-stat">
-          <span class="cover-stat-num">${(b.jobs_to_be_done||[]).length}</span>
-          <span class="cover-stat-label">User needs</span>
-        </div>
-        <div class="cover-stat">
-          <span class="cover-stat-num">${(b.feature_breakdown||[]).length}</span>
-          <span class="cover-stat-label">Features</span>
-        </div>
-        <div class="cover-stat">
-          <span class="cover-stat-num">${(b.services||[]).length}</span>
-          <span class="cover-stat-label">Services</span>
-        </div>
-        <div class="cover-stat">
-          <span class="cover-stat-num">${(b.integrations||[]).length}</span>
-          <span class="cover-stat-label">Integrations</span>
-        </div>
-        <div class="cover-stat">
-          <span class="cover-stat-num">${(b.domain_entities||[]).length}</span>
-          <span class="cover-stat-label">Entities</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="cover-meta">
-      <div class="cover-meta-item">
-        <span class="cover-meta-label">Date</span>
-        <span class="cover-meta-val">${dateStr}</span>
-      </div>
-      <div class="cover-meta-item">
-        <span class="cover-meta-label">Version</span>
-        <span class="cover-meta-val">${version}</span>
-      </div>
-      <div class="cover-meta-item">
-        <span class="cover-meta-label">Status</span>
-        <span class="cover-meta-val">Draft</span>
-      </div>
-      <div class="cover-meta-item">
-        <span class="cover-meta-label">Generated by</span>
-        <span class="cover-meta-val">cornea.ai</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- CONTENT -->
-<div class="wrap">
-<div class="content">
-
-  <!-- 1. EXECUTIVE SUMMARY -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-num">1</div>
-      <div class="section-title">Executive Summary</div>
-    </div>
-    <div class="callout callout-blue">
-      <p>${b.prd_summary || ''}</p>
-    </div>
-    <p>${b.system_explanation || ''}</p>
-  </div>
-
-  <!-- 2. PROBLEM STATEMENT -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-num">2</div>
-      <div class="section-title">Problem Statement</div>
-    </div>
-    <div class="callout callout-amber">
-      <p>The following problems drive the need for this product and define the core opportunity being addressed.</p>
-    </div>
-    <div class="goal-list">
-      ${(b.business_goals||[]).slice(0,4).map((g,i) => `
-      <div class="goal-item">
-        <span class="goal-id">P${String(i+1).padStart(2,'0')}</span>
-        <span class="goal-text">${g}</span>
-      </div>`).join('')}
-    </div>
-  </div>
-
-  <!-- 3. GOALS & SUCCESS METRICS -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-num">3</div>
-      <div class="section-title">Goals &amp; Success Metrics</div>
-    </div>
-    <div class="goal-list">
-      ${(b.business_goals||[]).map((g,i) => `
-      <div class="goal-item">
-        <span class="goal-id">G${String(i+1).padStart(2,'0')}</span>
-        <span class="goal-text">${g}</span>
-      </div>`).join('')}
-    </div>
-  </div>
-
-  <!-- 4. USER PERSONAS -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-num">4</div>
-      <div class="section-title">User Personas</div>
-    </div>
-    <div class="persona-grid">
-      ${(b.users||[]).map(u => `
-      <div class="persona">
-        <div class="persona-top">
-          <div class="persona-avatar">👤</div>
-          <div>
-            <div class="persona-name">${u.name}</div>
-            <div class="persona-role">${u.role}</div>
-          </div>
-        </div>
-        <div class="persona-desc">${u.description}</div>
-      </div>`).join('')}
-    </div>
-  </div>
-
-  <!-- 5. FUNCTIONAL REQUIREMENTS -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-num">5</div>
-      <div class="section-title">Functional Requirements</div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Feature</th>
-            <th>Description</th>
-            <th>Priority</th>
-            <th>Service</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${(b.feature_breakdown||[]).map((f,i) => `
-          <tr>
-            <td class="id-cell">FR-${String(i+1).padStart(3,'0')}</td>
-            <td class="name-cell">${f.feature}</td>
-            <td>${f.description}</td>
-            <td><span class="badge badge-${(f.badge||'core').toLowerCase()}">${f.badge}</span></td>
-            <td style="color:var(--ink-3);font-size:11px">${f.service}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 6. NON-FUNCTIONAL REQUIREMENTS -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-num">6</div>
-      <div class="section-title">Non-Functional Requirements</div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr><th>ID</th><th>Category</th><th>Requirement</th><th>Priority</th></tr>
-        </thead>
-        <tbody>
-          <tr><td class="id-cell">NFR-001</td><td class="name-cell">Performance</td><td>API response time must not exceed 500ms at the 95th percentile under expected load.</td><td><span class="badge badge-high">High</span></td></tr>
-          <tr><td class="id-cell">NFR-002</td><td class="name-cell">Scalability</td><td>System must support horizontal scaling to handle 10x baseline load without architectural changes.</td><td><span class="badge badge-high">High</span></td></tr>
-          <tr><td class="id-cell">NFR-003</td><td class="name-cell">Security</td><td>All data in transit encrypted via TLS 1.3. Sensitive data at rest encrypted with AES-256.</td><td><span class="badge badge-high">High</span></td></tr>
-          <tr><td class="id-cell">NFR-004</td><td class="name-cell">Availability</td><td>System must maintain 99.9% uptime SLA, excluding scheduled maintenance windows.</td><td><span class="badge badge-high">High</span></td></tr>
-          <tr><td class="id-cell">NFR-005</td><td class="name-cell">Maintainability</td><td>Test coverage must exceed 80%. All public APIs must have OpenAPI documentation.</td><td><span class="badge badge-medium">Medium</span></td></tr>
-          <tr><td class="id-cell">NFR-006</td><td class="name-cell">Accessibility</td><td>UI must conform to WCAG 2.1 Level AA standards across all user-facing interfaces.</td><td><span class="badge badge-medium">Medium</span></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 7. SYSTEM ARCHITECTURE -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-num">7</div>
-      <div class="section-title">System Architecture</div>
-    </div>
-    <p>${b.system_explanation || ''}</p>
-    ${(b.services||[]).map(s => `
-    <div class="service-block">
-      <div class="service-head">
-        <span class="service-name">${s.name}</span>
-        <span class="service-group">${s.group}</span>
-      </div>
-      <div class="service-body">
-        <div class="service-desc">${s.description}</div>
-        <div class="api-list">
-          ${(s.apis||[]).map(a => `
-          <div class="api-row">
-            <span class="api-method api-${a.method.toLowerCase()}">${a.method}</span>
-            <span class="api-route">${a.route}</span>
-            <span class="api-purpose">— ${a.purpose}</span>
-          </div>`).join('')}
-        </div>
-        ${s.dependencies?.length ? `<div class="dep-list"><strong>Dependencies:</strong> ${s.dependencies.join(', ')}</div>` : ''}
-      </div>
-    </div>`).join('')}
-  </div>
-
-  <!-- 8. DATA ARCHITECTURE -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-num">8</div>
-      <div class="section-title">Data Architecture</div>
-    </div>
-    <div class="data-grid">
-      ${b.data_layer?.database ? `<div class="data-card"><div class="data-val">${b.data_layer.database}</div><div class="data-label">Primary Database</div></div>` : ''}
-      ${b.data_layer?.cache ? `<div class="data-card"><div class="data-val">${b.data_layer.cache}</div><div class="data-label">Cache Layer</div></div>` : ''}
-      ${b.data_layer?.storage ? `<div class="data-card"><div class="data-val">${b.data_layer.storage}</div><div class="data-label">File Storage</div></div>` : ''}
-    </div>
-    <p>${b.data_layer?.description || ''}</p>
-    <h3 style="margin-top:20px;margin-bottom:12px">Domain Entities</h3>
-    ${(b.domain_entities||[]).map(e => `
-    <div class="entity-block">
-      <div class="entity-head">
-        <div class="entity-name">${e.name}</div>
-        <div class="entity-desc">${e.description}</div>
-      </div>
-      <div class="entity-body">
-        <div class="field-list">
-          ${(e.fields||[]).map(f => `<span class="field-tag">${f}</span>`).join('')}
-        </div>
-      </div>
-    </div>`).join('')}
-  </div>
-
-  <!-- 9. EXTERNAL INTEGRATIONS -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-num">9</div>
-      <div class="section-title">External Integrations</div>
-    </div>
-    <div class="int-grid">
-      ${(b.integrations||[]).map(i => `
-      <div class="int-item">
-        <div class="int-icon">🔗</div>
-        <div>
-          <div class="int-name">${i.name}</div>
-          <div class="int-purpose">${i.purpose}</div>
-          <div class="int-type">${i.type}</div>
-        </div>
-      </div>`).join('')}
-    </div>
-  </div>
-
-  <!-- 10. BUSINESS RULES -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-num">10</div>
-      <div class="section-title">Business Rules &amp; Constraints</div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>ID</th><th>Rule</th></tr></thead>
-        <tbody>
-          ${(b.business_rules||[]).map((r,i) => `
-          <tr>
-            <td class="id-cell">BR-${String(i+1).padStart(3,'0')}</td>
-            <td>${r}</td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 11. OUT OF SCOPE -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-num">11</div>
-      <div class="section-title">Out of Scope — Version 1.0</div>
-    </div>
-    <div class="oos-list">
-      ${['Native mobile applications (web-responsive design only)', 'Third-party plugin or marketplace system', 'Multi-language and internationalization (i18n) support', 'Advanced AI or ML capabilities beyond core product scope', 'Custom on-premise or self-hosted deployment options'].map(item => `
-      <div class="oos-item">
-        <span class="oos-x">✕</span>
-        <span>${item}</span>
-      </div>`).join('')}
-    </div>
-  </div>
-
-  <!-- 12. ASSUMPTIONS -->
-  <div class="section">
-    <div class="section-header">
-      <div class="section-num">12</div>
-      <div class="section-title">Assumptions &amp; Dependencies</div>
-    </div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>ID</th><th>Assumption</th></tr></thead>
-        <tbody>
-          ${(b.system_boundaries||[]).length > 0
-            ? (b.system_boundaries||[]).map((a,i) => `<tr><td class="id-cell">A${String(i+1).padStart(2,'0')}</td><td>${a}</td></tr>`).join('')
-            : ['Users access the product via a modern web browser (Chrome, Firefox, Safari, Edge).', 'Third-party services and APIs maintain backward compatibility during the development period.', 'Infrastructure will be provisioned on a major cloud provider (AWS, GCP, or Azure).', 'Development team follows standard agile practices with two-week sprint cycles.', 'Legal and compliance review will be conducted before production launch.'].map((a,i) => `<tr><td class="id-cell">A${String(i+1).padStart(2,'0')}</td><td>${a}</td></tr>`).join('')
-          }
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-</div>
-</div>
-
-<div class="footer">
-  <span><span class="footer-logo">cornea.ai</span> · Generated ${dateStr}</span>
-  <span>Version ${version} · CONFIDENTIAL · Do not distribute</span>
-</div>
-
-</body>
-</html>`
-
-    const blob = new Blob([html], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const win = window.open(url, '_blank')
-    if (win) {
-      win.onload = () => setTimeout(() => { win.print(); URL.revokeObjectURL(url) }, 600)
-    }
+  const handleRegenerate = () => {
+    const newIdea = extraContext.trim() ? `${idea}. Additional context: ${extraContext.trim()}` : idea
+    onRegenerate(newIdea)
   }
 
   return (
@@ -879,18 +159,16 @@ ${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.de
       <nav className="flex-shrink-0 flex items-center justify-between px-6 py-4"
         style={{ background: 'rgba(5,5,15,0.95)', borderBottom: '1px solid rgba(255,255,255,0.07)', backdropFilter: 'blur(12px)' }}>
         <button onClick={onNewIdea} className="flex items-center gap-2 transition-opacity hover:opacity-70">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #4a7cf0, #7c5cf0)' }}>
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #4a7cf0, #7c5cf0)' }}>
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
               <ellipse cx="8" cy="8" rx="7" ry="4.5" stroke="white" strokeWidth="1.3"/>
               <circle cx="8" cy="8" r="2.2" fill="white"/>
-              <circle cx="8.7" cy="7.3" r="0.65" fill="rgba(74,124,240,0.5)"/>
             </svg>
           </div>
           <span className="text-[14px] font-medium" style={{ color: 'rgba(255,255,255,0.9)' }}>cornea.ai</span>
         </button>
 
-        <span className="text-[12px] px-3 py-1 rounded-full hidden md:block max-w-[380px] truncate"
+        <span className="text-[12px] px-3 py-1 rounded-full hidden md:block max-w-[340px] truncate"
           style={{ background: 'rgba(74,124,240,0.08)', border: '1px solid rgba(74,124,240,0.2)', color: 'rgba(255,255,255,0.4)' }}>
           {idea}
         </span>
@@ -898,10 +176,8 @@ ${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.de
         <div className="flex items-center gap-2">
           <button onClick={onViewGraph}
             className="flex items-center gap-2 text-[13px] px-4 py-2 rounded-xl font-medium transition-all"
-            style={{ background: 'linear-gradient(135deg, #4a7cf0, #7c5cf0)', color: '#fff' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.opacity = '0.85'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.opacity = '1'}>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+            style={{ background: 'linear-gradient(135deg, #4a7cf0, #7c5cf0)', color: '#fff' }}>
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
               <circle cx="3" cy="3" r="2" stroke="white" strokeWidth="1.3"/>
               <circle cx="13" cy="3" r="2" stroke="white" strokeWidth="1.3"/>
               <circle cx="8" cy="13" r="2" stroke="white" strokeWidth="1.3"/>
@@ -911,13 +187,18 @@ ${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.de
             View Graph
           </button>
 
-          <button onClick={handleGeneratePRD}
+          <button onClick={handleGeneratePRD} disabled={prdGenerating}
             className="text-[13px] px-4 py-2 rounded-xl font-medium transition-all"
-            style={{ background: 'rgba(13,184,130,0.1)', border: '1px solid rgba(13,184,130,0.25)', color: '#3dd4a0' }}>
-            Generate PRD
+            style={{ background: 'rgba(13,184,130,0.1)', border: '1px solid rgba(13,184,130,0.25)', color: '#3dd4a0', opacity: prdGenerating ? 0.6 : 1 }}>
+            {prdGenerating ? 'Generating...' : 'Generate PRD'}
           </button>
 
-          {/* Export dropdown */}
+          <button onClick={() => setShowRegenerate(true)}
+            className="text-[13px] px-4 py-2 rounded-xl font-medium transition-all"
+            style={{ background: 'rgba(124,92,240,0.1)', border: '1px solid rgba(124,92,240,0.25)', color: '#a88cf8' }}>
+            ↺ Regenerate
+          </button>
+
           <div className="relative group">
             <button className="text-[12px] px-3 py-2 rounded-xl transition-all"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)' }}>
@@ -929,96 +210,72 @@ ${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.de
                 className="w-full text-left px-4 py-2.5 text-[13px] transition-all hover:bg-white/5"
                 style={{ color: 'rgba(255,255,255,0.6)' }}>📄 Markdown</button>
               <div style={{ height: 1, background: 'rgba(255,255,255,0.06)' }} />
-              <button onClick={handleExportPDF}
+              <button onClick={handleExportPDF} disabled={prdGenerating}
                 className="w-full text-left px-4 py-2.5 text-[13px] transition-all hover:bg-white/5"
                 style={{ color: 'rgba(255,255,255,0.6)' }}>📑 PDF</button>
             </div>
           </div>
 
           <button onClick={onNewIdea} className="text-[12px] px-3 py-2 rounded-xl transition-all"
-            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)'}>
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)' }}>
             New idea
           </button>
         </div>
       </nav>
 
-      {/* Tabs header */}
+      {/* Tabs */}
       <div className="flex-shrink-0 flex items-center px-6 gap-0"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(5,5,15,0.8)' }}>
         {TABS.map((tab, i) => (
           <button key={tab} onClick={() => setActiveTab(i)}
             className="text-[13px] px-5 py-3.5 transition-all"
-            style={{
-              color: activeTab === i ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)',
-              borderBottom: activeTab === i ? '2px solid #4a7cf0' : '2px solid transparent',
-              fontWeight: activeTab === i ? 500 : 400,
-            }}>
+            style={{ color: activeTab === i ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)', borderBottom: activeTab === i ? '2px solid #4a7cf0' : '2px solid transparent', fontWeight: activeTab === i ? 500 : 400 }}>
             {tab}
           </button>
         ))}
+        <div className="ml-auto pr-2">
+          <span className="text-[11px] px-2 py-1 rounded" style={{ color: 'rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.04)' }}>
+            Click any field to edit
+          </span>
+        </div>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="flex-1 overflow-y-auto px-6 py-6" onScroll={e => e.currentTarget.scrollTop = e.currentTarget.scrollTop}>
 
         {/* OVERVIEW */}
         {activeTab === 0 && (
           <div className="max-w-3xl mx-auto space-y-5">
-            {/* Stats */}
             <div className="grid grid-cols-4 gap-3">
               {[
-                { num: blueprint.users?.length || 0, label: 'User types', color: '#7aa8f8' },
-                { num: blueprint.feature_breakdown?.length || 0, label: 'Features', color: '#a88cf8' },
-                { num: blueprint.services?.length || 0, label: 'Services', color: '#3dd4a0' },
-                { num: blueprint.jobs_to_be_done?.length || 0, label: 'Jobs to be done', color: '#f0a860' },
+                { num: bp.users?.length || 0, label: 'User types', color: '#7aa8f8' },
+                { num: bp.feature_breakdown?.length || 0, label: 'Features', color: '#a88cf8' },
+                { num: bp.services?.length || 0, label: 'Services', color: '#3dd4a0' },
+                { num: bp.jobs_to_be_done?.length || 0, label: 'Jobs to be done', color: '#f0a860' },
               ].map((s, i) => (
-                <div key={i} className="p-4 rounded-2xl text-center"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                <div key={i} className="p-4 rounded-2xl text-center" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
                   <p className="text-[28px] font-semibold mb-0.5" style={{ color: s.color }}>{s.num}</p>
                   <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>{s.label}</p>
                 </div>
               ))}
             </div>
 
-            {/* PRD */}
             <Card accent="#4a7cf0">
               <SLabel>Product summary</SLabel>
-              <p className="text-[14px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                {blueprint.prd_summary}
-              </p>
+              <EditableText value={bp.prd_summary || ''} onChange={v => update('prd_summary', v)} multiline
+                className="text-[14px] leading-relaxed" />
             </Card>
 
-            {/* Business goals */}
             <div>
               <SLabel>Business goals</SLabel>
-              <div className="grid grid-cols-2 gap-2">
-                {(blueprint.business_goals||[]).map((g, i) => (
-                  <div key={i} className="flex items-start gap-2.5 p-3 rounded-xl"
-                    style={{ background: 'rgba(13,184,130,0.06)', border: '1px solid rgba(13,184,130,0.15)' }}>
-                    <span style={{ color: '#3dd4a0', fontSize: 12, marginTop: 1 }}>✦</span>
-                    <p className="text-[12px] leading-snug" style={{ color: 'rgba(255,255,255,0.55)' }}>{g}</p>
-                  </div>
-                ))}
-              </div>
+              <EditableList items={bp.business_goals || []} onChange={v => update('business_goals', v)}
+                color="#3dd4a0" bg="rgba(13,184,130,0.06)" border="rgba(13,184,130,0.15)" />
             </div>
 
-            {/* JTBDs */}
             <div>
               <SLabel>Jobs to be done</SLabel>
-              <div className="space-y-2">
-                {(blueprint.jobs_to_be_done||[]).map((j, i) => (
-                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl"
-                    style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded flex-shrink-0 mt-0.5"
-                      style={{ background: 'rgba(74,124,240,0.15)', color: '#7aa8f8' }}>
-                      {String(i+1).padStart(2,'0')}
-                    </span>
-                    <p className="text-[13px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{j}</p>
-                  </div>
-                ))}
-              </div>
+              <EditableList items={bp.jobs_to_be_done || []} onChange={v => update('jobs_to_be_done', v)}
+                color="#f0a860" bg="rgba(224,128,32,0.06)" border="rgba(224,128,32,0.15)" />
             </div>
           </div>
         )}
@@ -1027,28 +284,42 @@ ${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.de
         {activeTab === 1 && (
           <div className="max-w-3xl mx-auto">
             <SLabel>User roles</SLabel>
-            <div className="flex flex-wrap gap-2 mb-2">
-              {(blueprint.users||[]).map((u, i) => (
-                <Tag key={i}>{u.role}</Tag>
+            <div className="flex flex-wrap gap-2 mb-6">
+              {(bp.users||[]).map((u, i) => (
+                <span key={i} className="text-[12px] px-3 py-1 rounded-full"
+                  style={{ background: 'rgba(74,124,240,0.09)', border: '1px solid rgba(74,124,240,0.2)', color: '#7aa8f8' }}>
+                  {u.role}
+                </span>
               ))}
             </div>
 
-            <SLabel>User types ({blueprint.users?.length || 0})</SLabel>
-            <div className="grid grid-cols-2 gap-3">
-              {(blueprint.users||[]).map((u, i) => (
-                <div key={i} className="p-4 rounded-2xl"
+            <SLabel>User types ({bp.users?.length || 0})</SLabel>
+            <div className="space-y-3">
+              {(bp.users||[]).map((u, i) => (
+                <div key={i} className="group p-4 rounded-2xl"
                   style={{ background: 'rgba(74,124,240,0.07)', border: '1px solid rgba(74,124,240,0.18)' }}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-[14px]"
+                  <div className="flex items-start gap-3 mb-2">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-[14px] flex-shrink-0"
                       style={{ background: 'rgba(74,124,240,0.2)' }}>👤</div>
-                    <div>
-                      <p className="text-[13px] font-semibold" style={{ color: '#7aa8f8' }}>{u.name}</p>
-                      <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>{u.role}</p>
+                    <div className="flex-1 min-w-0">
+                      <EditableText value={u.name} onChange={v => updateUser(i, 'name', v)}
+                        className="text-[14px] font-semibold block w-full" />
+                      <EditableText value={u.role} onChange={v => updateUser(i, 'role', v)}
+                        className="text-[11px] mt-0.5 block" />
                     </div>
+                    <button onClick={() => removeUser(i)}
+                      className="opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity flex-shrink-0 text-[11px] mt-1"
+                      style={{ color: '#f07878' }}>✕ Remove</button>
                   </div>
-                  <p className="text-[12px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>{u.description}</p>
+                  <EditableText value={u.description} onChange={v => updateUser(i, 'description', v)} multiline
+                    className="text-[12px] leading-relaxed block w-full" />
                 </div>
               ))}
+              <button onClick={addUser}
+                className="w-full py-3 rounded-2xl text-[13px] transition-all"
+                style={{ border: '1px dashed rgba(74,124,240,0.3)', color: 'rgba(74,124,240,0.6)' }}>
+                + Add user type
+              </button>
             </div>
           </div>
         )}
@@ -1056,24 +327,28 @@ ${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.de
         {/* FEATURES */}
         {activeTab === 2 && (
           <div className="max-w-3xl mx-auto">
-            <SLabel>Feature breakdown ({blueprint.feature_breakdown?.length || 0} features)</SLabel>
+            <SLabel>Feature breakdown ({bp.feature_breakdown?.length || 0} features)</SLabel>
             <div className="space-y-3">
-              {(blueprint.feature_breakdown||[]).map((f, i) => {
+              {(bp.feature_breakdown||[]).map((f, i) => {
                 const bc = BADGE_COLORS[f.badge] || BADGE_COLORS.Core
                 return (
                   <div key={i} className="rounded-2xl overflow-hidden"
                     style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.07)' }}>
                     <div className="flex items-center gap-3 px-5 py-3.5"
                       style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.02)' }}>
-                      <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[13px] font-semibold"
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[12px] font-semibold"
                         style={{ background: bc.bg, color: bc.color }}>{i+1}</div>
-                      <span className="text-[14px] font-medium flex-1" style={{ color: 'rgba(255,255,255,0.85)' }}>{f.feature}</span>
+                      <div className="flex-1">
+                        <EditableText value={f.feature} onChange={v => updateFeature(i, 'feature', v)}
+                          className="text-[14px] font-medium block" />
+                      </div>
                       <span className="text-[11px] px-2.5 py-1 rounded-lg font-medium"
                         style={{ background: bc.bg, color: bc.color }}>{f.badge}</span>
                     </div>
-                    <div className="px-5 py-3.5 flex items-center justify-between">
-                      <p className="text-[13px] leading-relaxed flex-1" style={{ color: 'rgba(255,255,255,0.4)' }}>{f.description}</p>
-                      <span className="text-[11px] px-2 py-0.5 rounded ml-3 flex-shrink-0"
+                    <div className="px-5 py-3.5 flex items-center justify-between gap-3">
+                      <EditableText value={f.description} onChange={v => updateFeature(i, 'description', v)} multiline
+                        className="text-[13px] leading-relaxed flex-1 block" />
+                      <span className="text-[11px] px-2 py-0.5 rounded flex-shrink-0"
                         style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' }}>{f.service}</span>
                     </div>
                   </div>
@@ -1086,10 +361,9 @@ ${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.de
         {/* ARCHITECTURE */}
         {activeTab === 3 && (
           <div className="max-w-3xl mx-auto">
-            {/* Services */}
             <SLabel>System services</SLabel>
             <div className="space-y-3 mb-6">
-              {(blueprint.services||[]).map((svc, i) => (
+              {(bp.services||[]).map((svc, i) => (
                 <div key={i} className="rounded-2xl overflow-hidden"
                   style={{ background: 'rgba(124,92,240,0.06)', border: '1px solid rgba(124,92,240,0.18)' }}>
                   <div className="flex items-center gap-3 px-5 py-3.5"
@@ -1118,10 +392,9 @@ ${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.de
               ))}
             </div>
 
-            {/* Integrations */}
             <SLabel>External integrations</SLabel>
             <div className="flex flex-wrap gap-2 mb-6">
-              {(blueprint.integrations||[]).map((int, i) => (
+              {(bp.integrations||[]).map((int, i) => (
                 <div key={i} className="flex items-center gap-2 px-3.5 py-2 rounded-xl"
                   style={{ background: 'rgba(160,80,240,0.08)', border: '1px solid rgba(160,80,240,0.2)' }}>
                   <span style={{ color: '#c080f8', fontSize: 12 }}>🔗</span>
@@ -1131,15 +404,14 @@ ${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.de
               ))}
             </div>
 
-            {/* Data layer */}
-            {blueprint.data_layer && (
+            {bp.data_layer && (
               <>
                 <SLabel>Data layer</SLabel>
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { label: 'Database', value: blueprint.data_layer.database },
-                    { label: 'Cache', value: blueprint.data_layer.cache },
-                    { label: 'Storage', value: blueprint.data_layer.storage },
+                    { label: 'Database', value: bp.data_layer.database },
+                    { label: 'Cache', value: bp.data_layer.cache },
+                    { label: 'Storage', value: bp.data_layer.storage },
                   ].filter(d => d.value).map((d, i) => (
                     <div key={i} className="p-3.5 rounded-xl text-center"
                       style={{ background: 'rgba(13,184,130,0.07)', border: '1px solid rgba(13,184,130,0.18)' }}>
@@ -1156,34 +428,41 @@ ${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.de
         {/* PRD */}
         {activeTab === 4 && (
           <div className="max-w-3xl mx-auto space-y-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[13px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                Click fields to edit. Click Generate PRD to download the full document.
+              </p>
+              <button onClick={handleGeneratePRD} disabled={prdGenerating}
+                className="flex items-center gap-2 text-[13px] px-4 py-2 rounded-xl font-medium transition-all"
+                style={{ background: 'rgba(13,184,130,0.1)', border: '1px solid rgba(13,184,130,0.25)', color: '#3dd4a0', opacity: prdGenerating ? 0.6 : 1 }}>
+                {prdGenerating ? '⏳ Generating...' : '↓ Generate PRD'}
+              </button>
+            </div>
+
             <Card accent="#4a7cf0">
               <SLabel>PRD summary</SLabel>
-              <p className="text-[14px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.6)' }}>{blueprint.prd_summary}</p>
+              <EditableText value={bp.prd_summary || ''} onChange={v => update('prd_summary', v)} multiline
+                className="text-[14px] leading-relaxed block w-full" />
             </Card>
 
             <Card>
               <SLabel>System explanation</SLabel>
-              <p className="text-[14px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{blueprint.system_explanation}</p>
+              <p className="text-[14px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{bp.system_explanation}</p>
             </Card>
 
-            {/* System flow */}
-            {(blueprint.system_flow||[]).length > 0 && (
+            {(bp.system_flow||[]).length > 0 && (
               <div>
                 <SLabel>System flow</SLabel>
                 <div className="space-y-2">
-                  {blueprint.system_flow.map((step, i) => (
+                  {bp.system_flow.map((step, i) => (
                     <div key={i} className="flex items-start gap-3">
                       <div className="flex flex-col items-center flex-shrink-0">
                         <div className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold"
                           style={{ background: 'rgba(74,124,240,0.2)', color: '#7aa8f8' }}>{step.step}</div>
-                        {i < blueprint.system_flow.length - 1 && (
-                          <div className="w-px flex-1 mt-1" style={{ background: 'rgba(74,124,240,0.15)', minHeight: 16 }} />
-                        )}
+                        {i < bp.system_flow.length - 1 && <div className="w-px flex-1 mt-1" style={{ background: 'rgba(74,124,240,0.15)', minHeight: 16 }} />}
                       </div>
                       <div className="pb-3">
-                        <p className="text-[12px] font-medium mb-0.5" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                          {step.from} → {step.to}
-                        </p>
+                        <p className="text-[12px] font-medium mb-0.5" style={{ color: 'rgba(255,255,255,0.6)' }}>{step.from} → {step.to}</p>
                         <p className="text-[12px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{step.action}</p>
                       </div>
                     </div>
@@ -1192,12 +471,11 @@ ${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.de
               </div>
             )}
 
-            {/* Business rules */}
-            {(blueprint.business_rules||[]).length > 0 && (
+            {(bp.business_rules||[]).length > 0 && (
               <div>
                 <SLabel>Business rules</SLabel>
                 <div className="space-y-2">
-                  {blueprint.business_rules.map((r, i) => (
+                  {bp.business_rules.map((r, i) => (
                     <div key={i} className="flex items-start gap-2.5 p-3 rounded-xl"
                       style={{ background: 'rgba(224,128,32,0.06)', border: '1px solid rgba(224,128,32,0.15)' }}>
                       <span style={{ color: '#f0a860', fontSize: 12, marginTop: 1 }}>→</span>
@@ -1211,6 +489,53 @@ ${(blueprint.services||[]).map(s=>`<div class="feat"><h3>${s.name}</h3><p>${s.de
         )}
       </div>
 
+      {/* Regenerate modal */}
+      {showRegenerate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(5,5,15,0.85)', backdropFilter: 'blur(8px)' }}>
+          <div className="w-full max-w-[480px] mx-4 rounded-2xl overflow-hidden"
+            style={{ background: '#0a0a1a', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
+            <div className="flex items-center justify-between px-6 py-5"
+              style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+              <div>
+                <h3 className="text-[16px] font-semibold" style={{ color: 'rgba(255,255,255,0.92)' }}>Regenerate blueprint</h3>
+                <p className="text-[12px] mt-0.5" style={{ color: 'rgba(255,255,255,0.35)' }}>Add more context and re-run all 4 agents</p>
+              </div>
+              <button onClick={() => setShowRegenerate(false)}
+                className="w-7 h-7 rounded-lg flex items-center justify-center transition-opacity hover:opacity-60"
+                style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>✕</button>
+            </div>
+            <div className="px-6 py-5">
+              <div className="mb-4 px-3 py-2.5 rounded-xl text-[13px]"
+                style={{ background: 'rgba(74,124,240,0.08)', border: '1px solid rgba(74,124,240,0.2)', color: 'rgba(255,255,255,0.5)' }}>
+                💡 {idea}
+              </div>
+              <p className="text-[12px] mb-2" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                Add more context, constraints, or direction (optional):
+              </p>
+              <textarea
+                className="w-full px-4 py-3 rounded-xl text-[13px] outline-none resize-none"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.75)', minHeight: 100 }}
+                placeholder="e.g. Focus more on the admin dashboard, add a mobile app layer, include payment processing..."
+                value={extraContext}
+                onChange={e => setExtraContext(e.target.value)}
+              />
+              <div className="flex gap-3 mt-4">
+                <button onClick={() => setShowRegenerate(false)}
+                  className="flex-1 py-3 rounded-xl text-[14px] transition-all"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.5)' }}>
+                  Cancel
+                </button>
+                <button onClick={handleRegenerate}
+                  className="flex-1 py-3 rounded-xl text-[14px] font-medium transition-all"
+                  style={{ background: 'linear-gradient(135deg, #7c5cf0, #4a7cf0)', color: '#fff' }}>
+                  ↺ Regenerate
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

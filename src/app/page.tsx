@@ -83,6 +83,7 @@ export default function Home() {
           idea={idea}
           onNewIdea={handleReset}
           onViewGraph={() => setShowGraph(true)}
+          onRegenerate={handleSubmit}
         />
       )}
 

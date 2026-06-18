@@ -74,7 +74,7 @@ export default function Home() {
       {screen === 'landing' && <Landing onSubmit={handleSubmit} />}
 
       {screen === 'loading' && (
-        <Loading idea={idea} activeAgent={activeAgent} error={error} onLogoClick={handleReset} />
+        <Loading idea={idea} activeAgent={activeAgent} error={error} onLogoClick={handleReset} onCancel={handleReset} />
       )}
 
       {screen === 'canvas' && blueprint && !showGraph && (

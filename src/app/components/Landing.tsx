@@ -174,8 +174,7 @@ export function Landing({ onSubmit }: LandingProps) {
         <div className="text-center mb-7 animate-fade-up">
           <h1 className="text-[46px] font-semibold leading-[1.1] tracking-[-0.02em] mb-4"
             style={{ color: 'rgba(255,255,255,0.95)' }}>
-            From idea to system blueprint,
-            before you write a line of code.
+            What are you building?
           </h1>
           <p className="text-[17px] font-light leading-relaxed"
             style={{ color: 'rgba(255,255,255,0.42)' }}>

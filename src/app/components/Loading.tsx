@@ -20,6 +20,7 @@ interface LoadingProps {
   activeAgent: number
   error: string | null
   onLogoClick?: () => void
+  onCancel?: () => void
 }
 
 interface SpiralProps {
@@ -170,7 +171,7 @@ function SpiralCanvas({ activeAgent }: SpiralProps) {
   )
 }
 
-export function Loading({ idea, activeAgent, error, onLogoClick }: LoadingProps) {
+export function Loading({ idea, activeAgent, error, onLogoClick, onCancel }: LoadingProps) {
   const progress = activeAgent >= 0 ? Math.min((activeAgent / 4) * 100, 100) : 0
   const label = activeAgent >= 0 && activeAgent < 4
     ? MESSAGES[activeAgent]
@@ -311,6 +312,19 @@ export function Loading({ idea, activeAgent, error, onLogoClick }: LoadingProps)
               </div>
             </div>
           </div>
+
+          {/* Cancel button */}
+          {!error && activeAgent >= 0 && activeAgent < 4 && onCancel && (
+            <div className="mt-4 text-center">
+              <button onClick={onCancel}
+                className="text-[12px] px-4 py-2 rounded-xl transition-all"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.3)' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(240,120,120,0.8)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(240,120,120,0.3)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.3)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)' }}>
+                Cancel generation
+              </button>
+            </div>
+          )}
 
           {/* Error */}
           {error && (

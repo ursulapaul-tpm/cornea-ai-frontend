@@ -155,8 +155,8 @@ export async function generatePRDPdf(blueprint: Blueprint, idea: string): Promis
       doc.rect(M, y - 2, CW, gh, 'FD')
     }
     f(8, 'bold', '#555555'); tx(`P${String(i + 1).padStart(2, '0')}`, M + 3, y + 4)
-    f(10, 'normal', '#222222'); gl.forEach((l: string, li: number) => tx(l, M + 14, y + 4 + li * 5.5))
-    y += gh + 2
+    f(10, 'normal', '#222222'); gl.forEach((l: string, li: number) => tx(l, M + 14, y + 4 + li * 5.8))
+    y += gh + 4
   }); y += 10
 
   // ════════════════════════════════════════════════════════
@@ -165,16 +165,16 @@ export async function generatePRDPdf(blueprint: Blueprint, idea: string): Promis
   need(20); secHead('3', 'Goals & Success Metrics')
   ;(blueprint.business_goals || []).forEach((g, i) => {
     const gl = doc.splitTextToSize(g, CW - 16)
-    const gh = gl.length * 5.5 + 6
-    need(gh + 2)
+    const gh = gl.length * 5.8 + 8
+    need(gh + 4)
     if (i % 2 === 0) {
       doc.setFillColor('#f7f7f7')
       doc.rect(M, y - 2, CW, gh, 'F')
     }
     rule(y + gh - 2, 0.2, '#e8e8e8')
     f(8, 'bold', '#555555'); tx(`G${String(i + 1).padStart(2, '0')}`, M + 3, y + 4)
-    f(10, 'normal', '#222222'); gl.forEach((l: string, li: number) => tx(l, M + 14, y + 4 + li * 5.5))
-    y += gh + 2
+    f(10, 'normal', '#222222'); gl.forEach((l: string, li: number) => tx(l, M + 14, y + 4 + li * 5.8))
+    y += gh + 4
   }); y += 10
 
   // ════════════════════════════════════════════════════════
@@ -217,14 +217,14 @@ export async function generatePRDPdf(blueprint: Blueprint, idea: string): Promis
   f(8, 'bold', '#ffffff')
   tx('ID', M + 2, y + 4)
   tx('FEATURE', M + 20, y + 4)
-  tx('DESCRIPTION', M + 65, y + 4)
-  tx('PRIORITY', M + 136, y + 4)
+  tx('DESCRIPTION', M + 70, y + 4)
+  tx('PRIORITY', M + 138, y + 4)
   tx('SERVICE', M + 158, y + 4)
   y += 11
 
   ;(blueprint.feature_breakdown || []).forEach((f2, i) => {
-    const featTrunc = doc.splitTextToSize(f2.feature || '', 42)[0]
-    const descLines = doc.splitTextToSize(f2.description || '', 66)
+    const featTrunc = doc.splitTextToSize(f2.feature || '', 46)[0]
+    const descLines = doc.splitTextToSize(f2.description || '', 62)
     const svcTrunc = doc.splitTextToSize(f2.service || '', 44)[0]
     const rh = Math.max(10, descLines.length * 5 + 6)
     need(rh + 2)
@@ -239,7 +239,7 @@ export async function generatePRDPdf(blueprint: Blueprint, idea: string): Promis
 
     f(8, 'bold', '#333333'); tx(`FR-${String(i + 1).padStart(3, '0')}`, M + 2, y + 5)
     f(9, 'bold', '#000000'); tx(featTrunc, M + 20, y + 5)
-    f(9, 'normal', '#444444'); descLines.forEach((l: string, li: number) => tx(l, M + 65, y + 5 + li * 5))
+    f(9, 'normal', '#444444'); descLines.forEach((l: string, li: number) => tx(l, M + 70, y + 5 + li * 5))
     f(8, 'bold', '#333333'); tx(f2.badge || '', M + 136, y + 5)
     f(8, 'normal', '#666666'); tx(svcTrunc, M + 158, y + 5)
     y += rh + 2
@@ -290,7 +290,7 @@ export async function generatePRDPdf(blueprint: Blueprint, idea: string): Promis
     let apiH = 0
     const apiLineData: { method: string; route: string; purposeLines: string[] }[] = []
     apis.forEach(a => {
-      const pLines = doc.splitTextToSize(a.purpose || '', CW - 60)
+      const pLines = doc.splitTextToSize(a.purpose || '', CW - 58)
       apiLineData.push({ method: a.method || '', route: a.route || '', purposeLines: pLines })
       apiH += pLines.length * 5 + 6
     })
@@ -325,7 +325,7 @@ export async function generatePRDPdf(blueprint: Blueprint, idea: string): Promis
       f(9, 'bold', '#000000'); tx(a.method, M + 9, y + 3.5)
       f(9, 'normal', '#333333'); tx(a.route, M + 28, y + 3.5)
       f(9, 'normal', '#666666')
-      a.purposeLines.forEach((pl: string, pi: number) => tx(pl, M + 60, y + 3.5 + pi * 5))
+      a.purposeLines.forEach((pl: string, pi: number) => tx(pl, M + 58, y + 3.5 + pi * 5))
       y += rowH
     })
     y += 10
@@ -460,7 +460,7 @@ export async function generatePRDPdf(blueprint: Blueprint, idea: string): Promis
   // ════════════════════════════════════════════════════════
   // SECTION 12 — Assumptions
   // ════════════════════════════════════════════════════════
-  need(20); secHead('12', 'Assumptions & Dependencies')
+  need(40); secHead('12', 'Assumptions & Dependencies')
   const assumptions = (blueprint.system_boundaries || []).length > 0
     ? blueprint.system_boundaries
     : [

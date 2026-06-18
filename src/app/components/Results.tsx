@@ -11,7 +11,7 @@ interface ResultsProps {
   onRegenerate: (newIdea: string) => void
 }
 
-const TABS = ['Overview', 'Users', 'Features', 'Architecture', 'PRD']
+const TABS = ['Overview', 'Users', 'Features', 'Architecture', 'Specs']
 
 const METHOD_COLORS: Record<string, string> = {
   GET: '#3dd4a0', POST: '#7aa8f8', PUT: '#f0a860', PATCH: '#f0a860', DELETE: '#f07878',
@@ -187,12 +187,6 @@ export function Results({ blueprint: initial, idea, onNewIdea, onViewGraph, onRe
             View Graph
           </button>
 
-          <button onClick={handleGeneratePRD} disabled={prdGenerating}
-            className="text-[13px] px-4 py-2 rounded-xl font-medium transition-all"
-            style={{ background: 'rgba(13,184,130,0.1)', border: '1px solid rgba(13,184,130,0.25)', color: '#3dd4a0', opacity: prdGenerating ? 0.6 : 1 }}>
-            {prdGenerating ? 'Generating...' : 'Generate PRD'}
-          </button>
-
           <button onClick={() => setShowRegenerate(true)}
             className="text-[13px] px-4 py-2 rounded-xl font-medium transition-all"
             style={{ background: 'rgba(124,92,240,0.1)', border: '1px solid rgba(124,92,240,0.25)', color: '#a88cf8' }}>
@@ -233,11 +227,7 @@ export function Results({ blueprint: initial, idea, onNewIdea, onViewGraph, onRe
             {tab}
           </button>
         ))}
-        <div className="ml-auto pr-2">
-          <span className="text-[11px] px-2 py-1 rounded" style={{ color: 'rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.04)' }}>
-            Click any field to edit
-          </span>
-        </div>
+        <div className="ml-auto pr-2" />
       </div>
 
       {/* Content */}
@@ -246,6 +236,13 @@ export function Results({ blueprint: initial, idea, onNewIdea, onViewGraph, onRe
         {/* OVERVIEW */}
         {activeTab === 0 && (
           <div className="max-w-3xl mx-auto space-y-5">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl mb-1"
+              style={{ background: 'rgba(74,124,240,0.06)', border: '1px solid rgba(74,124,240,0.15)' }}>
+              <span style={{ color: '#7aa8f8', fontSize: 13 }}>✎</span>
+              <span className="text-[12px]" style={{ color: 'rgba(74,124,240,0.8)' }}>
+                Click any text field to edit it inline
+              </span>
+            </div>
             <div className="grid grid-cols-4 gap-3">
               {[
                 { num: bp.users?.length || 0, label: 'User types', color: '#7aa8f8' },
@@ -283,6 +280,13 @@ export function Results({ blueprint: initial, idea, onNewIdea, onViewGraph, onRe
         {/* USERS */}
         {activeTab === 1 && (
           <div className="max-w-3xl mx-auto">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl mb-4"
+              style={{ background: 'rgba(74,124,240,0.06)', border: '1px solid rgba(74,124,240,0.15)' }}>
+              <span style={{ color: '#7aa8f8', fontSize: 13 }}>✎</span>
+              <span className="text-[12px]" style={{ color: 'rgba(74,124,240,0.8)' }}>
+                Click any name, role, or description to edit · Add or remove users below
+              </span>
+            </div>
             <SLabel>User roles</SLabel>
             <div className="flex flex-wrap gap-2 mb-6">
               {(bp.users||[]).map((u, i) => (
@@ -327,6 +331,13 @@ export function Results({ blueprint: initial, idea, onNewIdea, onViewGraph, onRe
         {/* FEATURES */}
         {activeTab === 2 && (
           <div className="max-w-3xl mx-auto">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-xl mb-4"
+              style={{ background: 'rgba(74,124,240,0.06)', border: '1px solid rgba(74,124,240,0.15)' }}>
+              <span style={{ color: '#7aa8f8', fontSize: 13 }}>✎</span>
+              <span className="text-[12px]" style={{ color: 'rgba(74,124,240,0.8)' }}>
+                Click any feature name or description to edit it inline
+              </span>
+            </div>
             <SLabel>Feature breakdown ({bp.feature_breakdown?.length || 0} features)</SLabel>
             <div className="space-y-3">
               {(bp.feature_breakdown||[]).map((f, i) => {
@@ -425,26 +436,9 @@ export function Results({ blueprint: initial, idea, onNewIdea, onViewGraph, onRe
           </div>
         )}
 
-        {/* PRD */}
+        {/* SPECS */}
         {activeTab === 4 && (
           <div className="max-w-3xl mx-auto space-y-5">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[13px]" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                Click fields to edit. Click Generate PRD to download the full document.
-              </p>
-              <button onClick={handleGeneratePRD} disabled={prdGenerating}
-                className="flex items-center gap-2 text-[13px] px-4 py-2 rounded-xl font-medium transition-all"
-                style={{ background: 'rgba(13,184,130,0.1)', border: '1px solid rgba(13,184,130,0.25)', color: '#3dd4a0', opacity: prdGenerating ? 0.6 : 1 }}>
-                {prdGenerating ? '⏳ Generating...' : '↓ Generate PRD'}
-              </button>
-            </div>
-
-            <Card accent="#4a7cf0">
-              <SLabel>PRD summary</SLabel>
-              <EditableText value={bp.prd_summary || ''} onChange={v => update('prd_summary', v)} multiline
-                className="text-[14px] leading-relaxed block w-full" />
-            </Card>
-
             <Card>
               <SLabel>System explanation</SLabel>
               <p className="text-[14px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.55)' }}>{bp.system_explanation}</p>

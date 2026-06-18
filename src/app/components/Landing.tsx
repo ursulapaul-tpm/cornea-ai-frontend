@@ -123,7 +123,7 @@ export function Landing({ onSubmit }: LandingProps) {
   }
 
   return (
-    <div className="relative flex flex-col overflow-hidden"
+    <div className="relative flex flex-col overflow-hidden" style2="height:100vh"
       style={{ background: '#05050f', height: '100vh', maxHeight: '100vh' }}>
 
       {/* Spiral background */}
@@ -174,7 +174,8 @@ export function Landing({ onSubmit }: LandingProps) {
         <div className="text-center mb-7 animate-fade-up">
           <h1 className="text-[46px] font-semibold leading-[1.1] tracking-[-0.02em] mb-4"
             style={{ color: 'rgba(255,255,255,0.95)' }}>
-            What are you building?
+            From idea to system blueprint,
+            before you write a line of code.
           </h1>
           <p className="text-[17px] font-light leading-relaxed"
             style={{ color: 'rgba(255,255,255,0.42)' }}>

@@ -177,7 +177,7 @@ export async function generatePRDPdf(blueprint: Blueprint, idea: string): Promis
   // 6. NFRs
   checkY(20); secHeader('6', 'Non-Functional Requirements')
   const nfrs = [
-    { id: 'NFR-001', cat: 'Performance', req: 'API response time ≤ 500ms at 95th percentile.' },
+    { id: 'NFR-001', cat: 'Performance', req: 'API response time <= 500ms at 95th percentile.' },
     { id: 'NFR-002', cat: 'Scalability', req: 'Horizontal scaling to 10x baseline without architecture changes.' },
     { id: 'NFR-003', cat: 'Security', req: 'TLS 1.3 in transit. AES-256 at rest for sensitive data.' },
     { id: 'NFR-004', cat: 'Availability', req: '99.9% uptime SLA excluding scheduled maintenance.' },
@@ -287,7 +287,7 @@ export async function generatePRDPdf(blueprint: Blueprint, idea: string): Promis
   const oos = ['Native mobile applications (web-responsive only)', 'Third-party plugin or marketplace system', 'Multi-language / i18n support', 'Advanced AI/ML beyond core scope', 'Custom on-premise deployment']
   oos.forEach(item => {
     checkY(10); strokeRect(M, y - 2, CW, 9, '#fef2f2', '#fecaca', 1.5)
-    sf(10, 'bold', RED); tx('✕', M + 3, y + 3.5); sf(9, 'normal', RED); tx(item, M + 10, y + 3.5); y += 11
+    sf(10, 'bold', RED); tx('-', M + 3, y + 3.5); sf(9, 'normal', RED); tx(item, M + 10, y + 3.5); y += 11
   }); y += 8
 
   // 12. Assumptions

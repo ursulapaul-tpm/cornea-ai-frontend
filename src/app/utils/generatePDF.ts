@@ -1,84 +1,114 @@
 import jsPDF from 'jspdf'
 import { Blueprint } from '../types'
 
-const BLUE = '#1a56db'
-const INK = '#0a0e1a'
-const INK2 = '#374151'
-const INK3 = '#6b7280'
-const INK4 = '#9ca3af'
-const RULE = '#e5e7eb'
-const BG2 = '#f9fafb'
-const GREEN = '#047857'
-const AMBER = '#b45309'
-const PURPLE = '#6d28d9'
-const RED = '#b91c1c'
-
-const METHOD_COLORS: Record<string, string> = {
-  GET: GREEN, POST: BLUE, PUT: AMBER, PATCH: AMBER, DELETE: RED,
+// Color palette
+const C = {
+  blue:        '#1a56db',
+  blueBg:      '#eff6ff',
+  blueBorder:  '#bfdbfe',
+  ink:         '#0a0e1a',
+  ink2:        '#374151',
+  ink3:        '#6b7280',
+  ink4:        '#9ca3af',
+  rule:        '#e5e7eb',
+  bg2:         '#f9fafb',
+  bg3:         '#f3f4f6',
+  green:       '#047857',
+  greenBg:     '#ecfdf5',
+  greenBorder: '#a7f3d0',
+  amber:       '#b45309',
+  amberBg:     '#fffbeb',
+  purple:      '#6d28d9',
+  purpleBg:    '#f5f3ff',
+  purpleBorder:'#e9d5ff',
+  red:         '#b91c1c',
+  redBg:       '#fef2f2',
+  redBorder:   '#fecaca',
+  white:       '#ffffff',
 }
-const BADGE_COLORS: Record<string, string> = {
-  Core: BLUE, Premium: GREEN, Admin: AMBER, System: PURPLE,
+
+const METHOD_C: Record<string, string> = {
+  GET: C.green, POST: C.blue, PUT: C.amber, PATCH: C.amber, DELETE: C.red,
+}
+const BADGE_C: Record<string, string> = {
+  Core: C.blue, Premium: C.green, Admin: C.amber, System: C.purple,
 }
 
 export async function generatePRDPdf(blueprint: Blueprint, idea: string): Promise<void> {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const W = 210
-  const M = 20
-  const CW = W - M * 2
-  let y = 0
+  const W = 210, M = 18, CW = W - M * 2
+  let y = M
 
+  // ── Primitives ────────────────────────────────────────────────────
   const addPage = () => { doc.addPage(); y = M }
-  const checkY = (needed: number) => { if (y + needed > 272) addPage() }
+  const need = (h: number) => { if (y + h > 275) addPage() }
 
-  const sf = (size: number, style: 'normal' | 'bold' = 'normal', color = INK) => {
+  const font = (size: number, style: 'normal' | 'bold' = 'normal', color = C.ink) => {
     doc.setFontSize(size); doc.setFont('helvetica', style); doc.setTextColor(color)
   }
-  const fillRect = (x: number, ry: number, w: number, h: number, fill: string, r = 0) => {
-    doc.setFillColor(fill); doc.setDrawColor(fill)
-    r > 0 ? doc.roundedRect(x, ry, w, h, r, r, 'F') : doc.rect(x, ry, w, h, 'F')
-  }
-  const strokeRect = (x: number, ry: number, w: number, h: number, fill: string, stroke: string, r = 0) => {
-    doc.setFillColor(fill); doc.setDrawColor(stroke); doc.setLineWidth(0.3)
-    r > 0 ? doc.roundedRect(x, ry, w, h, r, r, 'FD') : doc.rect(x, ry, w, h, 'FD')
-  }
-  const hline = (ly: number, color = RULE) => {
-    doc.setDrawColor(color); doc.setLineWidth(0.25); doc.line(M, ly, W - M, ly)
-  }
-  const tx = (str: string, x: number, ty: number, opts?: any) => doc.text(str, x, ty, opts)
 
-  const secHeader = (num: string, title: string) => {
-    checkY(16)
-    fillRect(M, y - 4, 7, 7, BLUE, 1.5)
-    sf(8, 'bold', '#ffffff'); tx(num, M + 1.5, y + 0.5)
-    sf(13, 'bold', INK); tx(title, M + 10, y + 0.5)
-    y += 5; hline(y, '#d1d5db'); y += 8
+  const fill = (x: number, fy: number, w: number, h: number, color: string, r = 0) => {
+    doc.setFillColor(color); doc.setDrawColor(color)
+    r > 0 ? doc.roundedRect(x, fy, w, h, r, r, 'F') : doc.rect(x, fy, w, h, 'F')
   }
 
-  const badgeTag = (label: string, x: number, ty: number, color: string) => {
-    const tw = doc.getTextWidth(label) + 6
-    doc.setFillColor(color + '28'); doc.setDrawColor(color + '55'); doc.setLineWidth(0.3)
-    doc.roundedRect(x, ty - 3.5, tw, 5.5, 1.5, 1.5, 'FD')
-    sf(8, 'bold', color); tx(label, x + 3, ty + 0.5)
-    return tw + 3
+  const box = (x: number, by: number, w: number, h: number, bg: string, border: string, r = 0) => {
+    doc.setFillColor(bg); doc.setDrawColor(border); doc.setLineWidth(0.25)
+    r > 0 ? doc.roundedRect(x, by, w, h, r, r, 'FD') : doc.rect(x, by, w, h, 'FD')
+  }
+
+  const line = (ly: number, color = C.rule, x1 = M, x2 = W - M) => {
+    doc.setDrawColor(color); doc.setLineWidth(0.25); doc.line(x1, ly, x2, ly)
+  }
+
+  const t = (str: string, x: number, ty: number, opts?: any) => doc.text(str || '', x, ty, opts)
+
+  const wrap = (str: string, x: number, wy: number, maxW: number, lh: number): number => {
+    const lines = doc.splitTextToSize(str || '', maxW)
+    lines.forEach((l: string, i: number) => t(l, x, wy + i * lh))
+    return lines.length * lh
+  }
+
+  const badge = (label: string, x: number, by: number, color: string) => {
+    const tw = doc.getTextWidth(label) + 8
+    box(x, by - 4, tw, 6, color + '22', color + '66', 2)
+    font(8, 'bold', color); t(label, x + 4, by + 0.5)
+    return tw + 4
+  }
+
+  // ── Section header ────────────────────────────────────────────────
+  const secHead = (num: string, title: string, newPage = false) => {
+    if (newPage) addPage()
+    else need(18)
+    fill(M, y - 5, 8, 8, C.blue, 2)
+    font(9, 'bold', C.white); t(num, M + 1.5, y + 0.5)
+    font(14, 'bold', C.ink); t(title, M + 11, y + 0.5)
+    y += 6; line(y, '#d1d5db'); y += 8
   }
 
   const now = new Date()
   const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
-  // ── COVER ─────────────────────────────────────────────────────────
-  doc.setFillColor(BLUE); doc.rect(0, 0, W * 0.34, 5, 'F')
-  doc.setFillColor(PURPLE); doc.rect(W * 0.34, 0, W * 0.33, 5, 'F')
-  doc.setFillColor(GREEN); doc.rect(W * 0.67, 0, W * 0.33, 5, 'F')
+  // ════════════════════════════════════════════════════════════════
+  // COVER PAGE
+  // ════════════════════════════════════════════════════════════════
+  fill(0, 0, W * 0.34, 5, C.blue)
+  fill(W * 0.34, 0, W * 0.33, 5, C.purple)
+  fill(W * 0.67, 0, W * 0.33, 5, C.green)
 
-  y = 38
-  sf(9, 'bold', BLUE); tx('PRODUCT REQUIREMENTS DOCUMENT', M, y); y += 14
-  sf(28, 'bold', INK)
-  const tLines = doc.splitTextToSize(idea, CW)
-  tLines.forEach((l: string) => { tx(l, M, y); y += 11 }); y += 4
-  fillRect(M, y, 14, 1.5, BLUE, 1); y += 10
-  sf(11, 'normal', INK2)
-  doc.splitTextToSize(blueprint.prd_summary || '', CW).slice(0, 4).forEach((l: string) => { tx(l, M, y); y += 6 }); y += 16
+  y = 36
+  font(9, 'bold', C.blue); t('PRODUCT REQUIREMENTS DOCUMENT', M, y); y += 14
 
+  font(26, 'bold', C.ink)
+  const titleLines = doc.splitTextToSize(idea, CW)
+  titleLines.forEach((l: string) => { t(l, M, y); y += 10 }); y += 4
+
+  fill(M, y, 16, 2, C.blue, 1); y += 10
+
+  font(12, 'normal', C.ink2)
+  doc.splitTextToSize(blueprint.prd_summary || '', CW).slice(0, 5).forEach((l: string) => { t(l, M, y); y += 6 }); y += 14
+
+  // Stats
   const stats = [
     { n: String(blueprint.users?.length || 0), l: 'Users' },
     { n: String(blueprint.feature_breakdown?.length || 0), l: 'Features' },
@@ -90,229 +120,352 @@ export async function generatePRDPdf(blueprint: Blueprint, idea: string): Promis
   const sw = CW / 6
   stats.forEach((s, i) => {
     const sx = M + i * sw
-    strokeRect(sx, y, sw - 2, 18, BG2, RULE, 2)
-    sf(16, 'bold', INK); tx(s.n, sx + (sw - 2) / 2, y + 9, { align: 'center' } as any)
-    sf(7, 'normal', INK4); tx(s.l.toUpperCase(), sx + (sw - 2) / 2, y + 14.5, { align: 'center' } as any)
+    box(sx, y, sw - 2, 18, C.bg2, C.rule, 2)
+    font(17, 'bold', C.ink); t(s.n, sx + (sw - 2) / 2, y + 9, { align: 'center' } as any)
+    font(7, 'normal', C.ink4); t(s.l.toUpperCase(), sx + (sw - 2) / 2, y + 15, { align: 'center' } as any)
   }); y += 26
 
-  hline(y); y += 8
-  const meta = [{ l: 'Date', v: dateStr }, { l: 'Version', v: '1.0' }, { l: 'Status', v: 'Draft' }, { l: 'Generated by', v: 'cornea.ai' }]
+  line(y); y += 8
+  const meta = [
+    { l: 'DATE', v: dateStr },
+    { l: 'VERSION', v: '1.0' },
+    { l: 'STATUS', v: 'Draft' },
+    { l: 'GENERATED BY', v: 'cornea.ai' },
+  ]
   meta.forEach((m, i) => {
     const mx = M + i * (CW / 4)
-    sf(7, 'bold', INK4); tx(m.l.toUpperCase(), mx, y)
-    sf(10, 'bold', INK2); tx(m.v, mx, y + 6)
+    font(7, 'bold', C.ink4); t(m.l, mx, y)
+    font(10, 'bold', C.ink2); t(m.v, mx, y + 6)
   })
 
-  // ── SECTION PAGES ─────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════
+  // SECTION 1 — Executive Summary
+  // ════════════════════════════════════════════════════════════════
   addPage()
+  secHead('1', 'Executive Summary')
 
-  // 1. Executive Summary
-  secHeader('1', 'Executive Summary')
-  const sumLines = doc.splitTextToSize(blueprint.prd_summary || '', CW - 10)
-  const sumH = sumLines.length * 5.5 + 10
-  checkY(sumH)
-  strokeRect(M, y - 2, CW, sumH, '#eff6ff', '#bfdbfe', 2)
-  fillRect(M, y - 2, 2, sumH, BLUE, 1)
-  sf(10, 'normal', '#1e3a8a')
-  sumLines.forEach((l: string, i: number) => tx(l, M + 6, y + 4 + i * 5.5))
+  const sumLines = doc.splitTextToSize(blueprint.prd_summary || '', CW - 12)
+  const sumH = sumLines.length * 5.5 + 12
+  box(M, y - 2, CW, sumH, C.blueBg, C.blueBorder, 2)
+  fill(M, y - 2, 2, sumH, C.blue, 1)
+  font(11, 'normal', '#1e3a8a')
+  sumLines.forEach((l: string, i: number) => t(l, M + 7, y + 4 + i * 5.5))
   y += sumH + 8
-  sf(10, 'normal', INK2)
+
+  font(11, 'normal', C.ink2)
   const expLines = doc.splitTextToSize(blueprint.system_explanation || '', CW)
-  expLines.forEach((l: string) => { checkY(6); tx(l, M, y); y += 5.5 }); y += 10
+  expLines.forEach((l: string) => { need(7); t(l, M, y); y += 5.8 }); y += 8
 
-  // 2. Problem Statement
-  checkY(20); secHeader('2', 'Problem Statement')
-  const probH = 14; strokeRect(M, y - 2, CW, probH, '#fffbeb', '#fde68a', 2)
-  fillRect(M, y - 2, 2, probH, AMBER, 1)
-  sf(10, 'normal', '#78350f'); tx('The following pain points define the core opportunity this product addresses.', M + 6, y + 5)
-  y += probH + 6
+  // ════════════════════════════════════════════════════════════════
+  // SECTION 2 — Problem Statement
+  // ════════════════════════════════════════════════════════════════
+  need(20); secHead('2', 'Problem Statement')
+  box(M, y - 2, CW, 13, C.amberBg, '#fde68a', 2)
+  fill(M, y - 2, 2, 13, C.amber, 1)
+  font(10, 'normal', '#78350f')
+  t('The following pain points define the core opportunity this product addresses.', M + 7, y + 5)
+  y += 17
+
   ;(blueprint.business_goals || []).slice(0, 4).forEach((g, i) => {
-    checkY(10); strokeRect(M, y - 2, CW, 9, BG2, RULE, 1.5)
-    sf(8, 'bold', BLUE); tx(`P${String(i + 1).padStart(2, '0')}`, M + 3, y + 3.5)
-    sf(10, 'normal', INK2); tx(doc.splitTextToSize(g, CW - 18)[0], M + 13, y + 3.5); y += 11
+    const gLines = doc.splitTextToSize(g, CW - 18)
+    const gh = gLines.length * 5 + 6
+    need(gh + 2)
+    box(M, y - 2, CW, gh, i % 2 === 0 ? C.bg2 : C.white, C.rule, 1.5)
+    font(8, 'bold', C.blue); t(`P0${i + 1}`, M + 3, y + 4)
+    font(10, 'normal', C.ink2); gLines.forEach((l: string, li: number) => t(l, M + 14, y + 4 + li * 5))
+    y += gh + 2
   }); y += 8
 
-  // 3. Goals
-  checkY(20); secHeader('3', 'Goals & Success Metrics')
+  // ════════════════════════════════════════════════════════════════
+  // SECTION 3 — Goals
+  // ════════════════════════════════════════════════════════════════
+  need(20); secHead('3', 'Goals & Success Metrics')
   ;(blueprint.business_goals || []).forEach((g, i) => {
-    checkY(10); strokeRect(M, y - 2, CW, 9, BG2, RULE, 1.5)
-    sf(8, 'bold', BLUE); tx(`G${String(i + 1).padStart(2, '0')}`, M + 3, y + 3.5)
-    sf(10, 'normal', INK2); tx(doc.splitTextToSize(g, CW - 18)[0], M + 13, y + 3.5); y += 11
+    const gLines = doc.splitTextToSize(g, CW - 18)
+    const gh = gLines.length * 5 + 6
+    need(gh + 2)
+    box(M, y - 2, CW, gh, i % 2 === 0 ? C.bg2 : C.white, C.rule, 1.5)
+    font(8, 'bold', C.blue); t(`G${String(i + 1).padStart(2, '0')}`, M + 3, y + 4)
+    font(10, 'normal', C.ink2); gLines.forEach((l: string, li: number) => t(l, M + 14, y + 4 + li * 5))
+    y += gh + 2
   }); y += 8
 
-  // 4. Personas
-  checkY(20); secHeader('4', 'User Personas')
+  // ════════════════════════════════════════════════════════════════
+  // SECTION 4 — User Personas
+  // ════════════════════════════════════════════════════════════════
+  secHead('4', 'User Personas', true)
   ;(blueprint.users || []).forEach((u, i) => {
-    const dl = doc.splitTextToSize(u.description || '', CW - 36)
-    const ch = Math.max(22, dl.length * 4.5 + 14)
-    checkY(ch + 4)
-    strokeRect(M, y, CW, ch, i % 2 === 0 ? '#eff6ff' : BG2, RULE, 2)
-    doc.setFillColor(BLUE + '33'); doc.circle(M + 10, y + ch / 2, 6, 'F')
-    sf(10, 'bold', INK); tx(u.name, M + 20, y + 8)
-    sf(8, 'bold', BLUE); tx(u.role.toUpperCase(), M + 20, y + 13.5)
-    sf(9, 'normal', INK3); dl.forEach((l: string, li: number) => tx(l, M + 20, y + 19 + li * 4.5))
+    const dl = doc.splitTextToSize(u.description || '', CW - 28)
+    const ch = Math.max(24, dl.length * 5 + 16)
+    need(ch + 4)
+    box(M, y, CW, ch, i % 2 === 0 ? C.blueBg : C.bg2, C.rule, 2)
+    // Avatar — colored circle with initials instead of emoji
+    const avatarColor = [C.blue, C.purple, C.green, C.amber, C.red, '#0891b2', '#7c3aed'][i % 7]
+    fill(M + 6, y + ch / 2 - 6, 12, 12, avatarColor + '33', 6)
+    font(9, 'bold', avatarColor)
+    const initials = (u.name || 'U').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+    t(initials, M + 8, y + ch / 2 + 1.5)
+    // Text
+    font(12, 'bold', C.ink); t(u.name || '', M + 22, y + 9)
+    font(8, 'bold', C.blue); t((u.role || '').toUpperCase(), M + 22, y + 14.5)
+    font(10, 'normal', C.ink3)
+    dl.forEach((l: string, li: number) => t(l, M + 22, y + 20 + li * 5))
     y += ch + 4
-  }); y += 6
+  }); y += 4
 
-  // 5. Functional Requirements
-  checkY(20); secHeader('5', 'Functional Requirements')
-  fillRect(M, y - 2, CW, 8, '#f3f4f6', 1.5)
-  sf(7, 'bold', INK3)
-  tx('ID', M + 2, y + 3); tx('FEATURE', M + 20, y + 3); tx('DESCRIPTION', M + 60, y + 3); tx('PRIORITY', M + 135, y + 3); tx('SERVICE', M + 162, y + 3)
-  y += 10
+  // ════════════════════════════════════════════════════════════════
+  // SECTION 5 — Functional Requirements
+  // ════════════════════════════════════════════════════════════════
+  secHead('5', 'Functional Requirements', true)
+
+  // Table header
+  fill(M, y - 2, CW, 9, C.bg3, 1.5)
+  font(8, 'bold', C.ink3)
+  t('ID', M + 2, y + 4)
+  t('FEATURE', M + 20, y + 4)
+  t('DESCRIPTION', M + 68, y + 4)
+  t('PRIORITY', M + 138, y + 4)
+  t('SERVICE', M + 162, y + 4)
+  y += 11
+
   ;(blueprint.feature_breakdown || []).forEach((f, i) => {
-    const dl = doc.splitTextToSize(f.description || '', 70)
-    const rh = Math.max(10, dl.length * 4.5 + 5)
-    checkY(rh + 2)
-    if (i % 2 === 0) { doc.setFillColor(BG2); doc.rect(M, y - 2, CW, rh + 2, 'F') }
-    hline(y + rh, '#f0f0f0')
-    sf(8, 'bold', BLUE); tx(`FR-${String(i + 1).padStart(3, '0')}`, M + 2, y + 4)
-    sf(9, 'bold', INK); tx(doc.splitTextToSize(f.feature, 36)[0], M + 20, y + 4)
-    sf(9, 'normal', INK2); dl.forEach((l: string, li: number) => tx(l, M + 60, y + 4 + li * 4.5))
-    badgeTag(f.badge || 'Core', M + 135, y + 4, BADGE_COLORS[f.badge] || BLUE)
-    sf(8, 'normal', INK4); tx(doc.splitTextToSize(f.service, 42)[0], M + 162, y + 4)
+    // Truncate feature name to fit column (max 42px wide)
+    const featName = doc.splitTextToSize(f.feature || '', 44)[0]
+    const descLines = doc.splitTextToSize(f.description || '', 64)
+    const serviceText = doc.splitTextToSize(f.service || '', 40)[0]
+    const rh = Math.max(12, descLines.length * 5 + 6)
+    need(rh + 2)
+
+    if (i % 2 === 0) { fill(M, y - 2, CW, rh + 2, C.bg2) }
+    line(y + rh, '#ebebeb')
+
+    font(8, 'bold', C.blue); t(`FR-${String(i + 1).padStart(3, '0')}`, M + 2, y + 5)
+    font(10, 'bold', C.ink); t(featName, M + 20, y + 5)
+    font(10, 'normal', C.ink2); descLines.forEach((l: string, li: number) => t(l, M + 68, y + 5 + li * 5))
+    const bc = BADGE_C[f.badge || 'Core'] || C.blue
+    badge(f.badge || 'Core', M + 138, y + 5, bc)
+    font(9, 'normal', C.ink4); t(serviceText, M + 162, y + 5)
     y += rh + 2
   }); y += 10
 
-  // 6. NFRs
-  checkY(20); secHeader('6', 'Non-Functional Requirements')
+  // ════════════════════════════════════════════════════════════════
+  // SECTION 6 — Non-Functional Requirements
+  // ════════════════════════════════════════════════════════════════
+  need(20); secHead('6', 'Non-Functional Requirements')
   const nfrs = [
-    { id: 'NFR-001', cat: 'Performance', req: 'API response time <= 500ms at 95th percentile.' },
-    { id: 'NFR-002', cat: 'Scalability', req: 'Horizontal scaling to 10x baseline without architecture changes.' },
-    { id: 'NFR-003', cat: 'Security', req: 'TLS 1.3 in transit. AES-256 at rest for sensitive data.' },
-    { id: 'NFR-004', cat: 'Availability', req: '99.9% uptime SLA excluding scheduled maintenance.' },
-    { id: 'NFR-005', cat: 'Maintainability', req: 'Test coverage > 80%. OpenAPI docs for all public APIs.' },
-    { id: 'NFR-006', cat: 'Accessibility', req: 'WCAG 2.1 Level AA across all user-facing interfaces.' },
+    { id: 'NFR-001', cat: 'Performance',    req: 'API response time <= 500ms at 95th percentile under expected load.' },
+    { id: 'NFR-002', cat: 'Scalability',    req: 'Horizontal scaling to 10x baseline load without architectural changes.' },
+    { id: 'NFR-003', cat: 'Security',       req: 'TLS 1.3 in transit. AES-256 encryption at rest for sensitive data.' },
+    { id: 'NFR-004', cat: 'Availability',   req: '99.9% uptime SLA excluding scheduled maintenance windows.' },
+    { id: 'NFR-005', cat: 'Maintainability',req: 'Test coverage > 80%. All public APIs documented via OpenAPI spec.' },
+    { id: 'NFR-006', cat: 'Accessibility',  req: 'UI conforms to WCAG 2.1 Level AA across all user-facing interfaces.' },
   ]
+  fill(M, y - 2, CW, 9, C.bg3, 1.5)
+  font(8, 'bold', C.ink3)
+  t('ID', M + 2, y + 4); t('CATEGORY', M + 22, y + 4); t('REQUIREMENT', M + 58, y + 4)
+  y += 11
+
   nfrs.forEach((r, i) => {
-    checkY(10)
-    if (i % 2 === 0) { doc.setFillColor(BG2); doc.rect(M, y - 2, CW, 9, 'F') }
-    hline(y + 7, '#f0f0f0')
-    sf(8, 'bold', BLUE); tx(r.id, M + 2, y + 3.5)
-    sf(9, 'bold', INK); tx(r.cat, M + 22, y + 3.5)
-    sf(9, 'normal', INK2); tx(r.req, M + 55, y + 3.5); y += 9
+    need(10)
+    if (i % 2 === 0) fill(M, y - 2, CW, 9, C.bg2)
+    line(y + 7, '#ebebeb')
+    font(8, 'bold', C.blue); t(r.id, M + 2, y + 3.5)
+    font(9, 'bold', C.ink); t(r.cat, M + 22, y + 3.5)
+    font(9, 'normal', C.ink2); t(r.req, M + 58, y + 3.5)
+    y += 9
   }); y += 10
 
-  // 7. Architecture
-  checkY(20); secHeader('7', 'System Architecture')
-  sf(10, 'normal', INK2)
-  doc.splitTextToSize(blueprint.system_explanation || '', CW).slice(0, 2).forEach((l: string) => { checkY(6); tx(l, M, y); y += 5.5 }); y += 8
-  ;(blueprint.services || []).forEach(s => {
-    const dl = doc.splitTextToSize(s.description || '', CW - 8)
-    const ac = (s.apis || []).length
-    const ch = dl.length * 4.5 + ac * 7.5 + 22
-    checkY(ch + 4)
-    strokeRect(M, y, CW, ch, '#faf5ff', '#e9d5ff', 2)
-    fillRect(M, y, CW, 11, '#f3e8ff', 2)
-    doc.setFillColor('#f3e8ff'); doc.rect(M, y + 6, CW, 5, 'F')
-    sf(10, 'bold', PURPLE); tx(s.name, M + 4, y + 8)
-    sf(7, 'bold', PURPLE); tx(s.group.toUpperCase(), W - M - 4, y + 8, { align: 'right' } as any)
-    y += 14
-    sf(9, 'normal', INK3); dl.forEach((l: string) => { tx(l, M + 4, y); y += 4.5 }); y += 3
-    ;(s.apis || []).forEach(a => {
-      const mc = METHOD_COLORS[a.method] || BLUE
-      doc.setFillColor(mc + '18'); doc.roundedRect(M + 4, y - 2, CW - 8, 7, 1, 1, 'F')
-      sf(8, 'bold', mc); tx(a.method, M + 7, y + 3)
-      sf(8, 'normal', INK); tx(a.route, M + 22, y + 3)
-      sf(8, 'normal', INK4); tx(`— ${a.purpose}`, M + 22 + doc.getTextWidth(a.route) + 3, y + 3); y += 7.5
-    }); y += 6
+  // ════════════════════════════════════════════════════════════════
+  // SECTION 7 — System Architecture (NEW PAGE)
+  // ════════════════════════════════════════════════════════════════
+  secHead('7', 'System Architecture', true)
+
+  font(11, 'normal', C.ink2)
+  const archExpLines = doc.splitTextToSize(blueprint.system_explanation || '', CW)
+  archExpLines.slice(0, 3).forEach((l: string) => { t(l, M, y); y += 5.8 }); y += 8
+
+  ;(blueprint.services || []).forEach((s, si) => {
+    const descLines = doc.splitTextToSize(s.description || '', CW - 8)
+    const apis = s.apis || []
+    const ch = descLines.length * 5 + apis.length * 8 + 22
+    need(ch + 6)
+
+    // Service card
+    box(M, y, CW, ch, C.purpleBg, C.purpleBorder, 2)
+    // Header bar
+    fill(M, y, CW, 12, C.purple + '22', 2)
+    doc.setFillColor(C.purple + '22'); doc.rect(M, y + 7, CW, 5, 'F')
+    font(11, 'bold', C.purple); t(s.name || '', M + 5, y + 9)
+    font(7, 'bold', C.purple); t((s.group || '').toUpperCase(), W - M - 4, y + 9, { align: 'right' } as any)
+    y += 15
+
+    font(10, 'normal', C.ink3)
+    descLines.forEach((l: string) => { t(l, M + 5, y); y += 5 }); y += 4
+
+    apis.forEach(a => {
+      const mc = METHOD_C[a.method || 'GET'] || C.blue
+      fill(M + 5, y - 2, CW - 10, 8, mc + '18', 1.5)
+      font(9, 'bold', mc); t(a.method || '', M + 8, y + 3.5)
+      font(9, 'normal', C.ink); t(a.route || '', M + 26, y + 3.5)
+      font(9, 'normal', C.ink4)
+      const purposeX = M + 26 + doc.getTextWidth(a.route || '') + 4
+      if (purposeX < W - M - 20) t(`— ${a.purpose || ''}`, purposeX, y + 3.5)
+      y += 8
+    })
+    y += 6
   }); y += 4
 
-  // 8. Data
-  checkY(20); secHeader('8', 'Data Architecture')
-  const di = [
+  // ════════════════════════════════════════════════════════════════
+  // SECTION 8 — Data Architecture (NEW PAGE)
+  // ════════════════════════════════════════════════════════════════
+  secHead('8', 'Data Architecture', true)
+
+  const dataItems = [
     { l: 'Primary Database', v: blueprint.data_layer?.database },
-    { l: 'Cache Layer', v: blueprint.data_layer?.cache },
-    { l: 'File Storage', v: blueprint.data_layer?.storage },
+    { l: 'Cache Layer',      v: blueprint.data_layer?.cache },
+    { l: 'File Storage',     v: blueprint.data_layer?.storage },
   ].filter(d => d.v)
-  if (di.length > 0) {
-    const dw2 = CW / di.length - 3
-    di.forEach((d, i) => {
-      const dx = M + i * (dw2 + 3)
-      strokeRect(dx, y, dw2, 16, '#ecfdf5', '#a7f3d0', 2)
-      sf(13, 'bold', GREEN); tx(d.v!, dx + dw2 / 2, y + 9, { align: 'center' } as any)
-      sf(7, 'bold', INK4); tx(d.l.toUpperCase(), dx + dw2 / 2, y + 14, { align: 'center' } as any)
-    }); y += 22
+
+  if (dataItems.length > 0) {
+    const dw = CW / dataItems.length - 3
+    dataItems.forEach((d, i) => {
+      box(M + i * (dw + 3), y, dw, 18, C.greenBg, C.greenBorder, 2)
+      font(14, 'bold', C.green); t(d.v!, M + i * (dw + 3) + dw / 2, y + 10, { align: 'center' } as any)
+      font(7, 'bold', C.ink4); t(d.l.toUpperCase(), M + i * (dw + 3) + dw / 2, y + 15.5, { align: 'center' } as any)
+    }); y += 24
   }
-  sf(10, 'normal', INK2)
-  doc.splitTextToSize(blueprint.data_layer?.description || '', CW).forEach((l: string) => { checkY(6); tx(l, M, y); y += 5.5 }); y += 8
-  sf(11, 'bold', INK); tx('Domain Entities', M, y); y += 8
+
+  font(10, 'normal', C.ink2)
+  doc.splitTextToSize(blueprint.data_layer?.description || '', CW).forEach((l: string) => { need(6); t(l, M, y); y += 5.5 }); y += 8
+
+  font(12, 'bold', C.ink); t('Domain Entities', M, y); y += 8
+
   ;(blueprint.domain_entities || []).forEach(e => {
     const el = doc.splitTextToSize(e.description || '', CW - 8)
-    const fieldRows = Math.ceil((e.fields || []).length / 5)
-    const ch = el.length * 4.5 + fieldRows * 7 + 16
-    checkY(ch + 4)
-    strokeRect(M, y, CW, ch, '#ecfdf5', '#a7f3d0', 2)
-    fillRect(M, y, CW, 9, '#d1fae5', 2); doc.setFillColor('#d1fae5'); doc.rect(M, y + 5, CW, 4, 'F')
-    sf(10, 'bold', GREEN); tx(e.name, M + 4, y + 6.5); y += 12
-    sf(9, 'normal', INK3); el.forEach((l: string) => { tx(l, M + 4, y); y += 4.5 }); y += 3
-    let fx = M + 4
-    ;(e.fields || []).forEach(field => {
+    const fields = e.fields || []
+    const fieldRows = Math.ceil(fields.length / 5)
+    const ch = el.length * 5 + fieldRows * 7.5 + 18
+    need(ch + 4)
+
+    box(M, y, CW, ch, C.greenBg, C.greenBorder, 2)
+    fill(M, y, CW, 10, C.green + '33', 2)
+    doc.setFillColor(C.green + '33'); doc.rect(M, y + 6, CW, 4, 'F')
+    font(11, 'bold', C.green); t(e.name || '', M + 5, y + 7.5)
+    y += 13
+
+    font(9, 'normal', C.ink3)
+    el.forEach((l: string) => { t(l, M + 5, y); y += 5 }); y += 3
+
+    let fx = M + 5
+    fields.forEach(field => {
       const fw = doc.getTextWidth(field) + 8
-      if (fx + fw > W - M) { fx = M + 4; y += 7 }
-      strokeRect(fx, y - 3, fw, 6, '#f3f4f6', RULE, 1)
-      sf(8, 'normal', INK2); tx(field, fx + 4, y + 1.5); fx += fw + 3
+      if (fx + fw > W - M - 5) { fx = M + 5; y += 7.5 }
+      box(fx, y - 3, fw, 6.5, C.bg3, C.rule, 1.5)
+      font(8, 'normal', C.ink2); t(field, fx + 4, y + 1.5)
+      fx += fw + 3
     }); y += 10
   }); y += 6
 
-  // 9. Integrations
-  checkY(20); secHeader('9', 'External Integrations')
-  ;(blueprint.integrations || []).forEach((int, i) => {
-    checkY(20); const iw = CW / 2 - 2; const ix = M + (i % 2) * (iw + 4)
-    if (i % 2 === 0) {
-      strokeRect(ix, y, iw, 20, BG2, RULE, 2)
-      if (blueprint.integrations?.[i + 1]) strokeRect(M + iw + 4, y, iw, 20, BG2, RULE, 2)
-    }
-    doc.setFillColor('#f5f3ff'); doc.circle(ix + 8, y + 10, 5, 'F')
-    sf(10, 'bold', INK); tx(int.name, ix + 16, y + 8)
-    sf(8, 'normal', INK3); tx(doc.splitTextToSize(int.purpose, iw - 18)[0], ix + 16, y + 13)
-    sf(7, 'bold', PURPLE); tx(int.type.toUpperCase(), ix + 16, y + 18)
-    if (i % 2 === 1) y += 23
-  })
-  if ((blueprint.integrations || []).length % 2 !== 0) y += 23; y += 6
+  // ════════════════════════════════════════════════════════════════
+  // SECTION 9 — Integrations
+  // ════════════════════════════════════════════════════════════════
+  need(20); secHead('9', 'External Integrations')
+  const ints = blueprint.integrations || []
+  const iw = (CW - 6) / 2
 
-  // 10. Business Rules
-  checkY(20); secHeader('10', 'Business Rules & Constraints')
+  ints.forEach((int, i) => {
+    if (i % 2 === 0) need(22)
+    const ix = M + (i % 2) * (iw + 6)
+    const iy = (i % 2 === 0) ? y : y
+
+    if (i % 2 === 0) {
+      box(ix, iy, iw, 20, C.bg2, C.rule, 2)
+      if (ints[i + 1]) box(M + iw + 6, iy, iw, 20, C.bg2, C.rule, 2)
+    }
+
+    // Colored dot instead of emoji
+    const dotColor = [C.blue, C.green, C.amber, C.purple, C.red][i % 5]
+    fill(ix + 6, iy + 6, 8, 8, dotColor + '33', 4)
+    fill(ix + 8, iy + 8, 4, 4, dotColor, 2)
+
+    font(10, 'bold', C.ink); t(int.name || '', ix + 18, iy + 9)
+    font(9, 'normal', C.ink3); t(doc.splitTextToSize(int.purpose || '', iw - 20)[0], ix + 18, iy + 14.5)
+    font(7, 'bold', C.purple); t((int.type || '').toUpperCase(), ix + 18, iy + 19)
+
+    if (i % 2 === 1) y += 24
+  })
+  if (ints.length % 2 !== 0) y += 24; y += 6
+
+  // ════════════════════════════════════════════════════════════════
+  // SECTION 10 — Business Rules
+  // ════════════════════════════════════════════════════════════════
+  need(20); secHead('10', 'Business Rules & Constraints')
   ;(blueprint.business_rules || []).forEach((r, i) => {
-    const rl = doc.splitTextToSize(r, CW - 20); const rh = rl.length * 4.5 + 6
-    checkY(rh + 2)
-    if (i % 2 === 0) { doc.setFillColor(BG2); doc.rect(M, y - 2, CW, rh + 2, 'F') }
-    hline(y + rh, '#f0f0f0')
-    sf(8, 'bold', BLUE); tx(`BR-${String(i + 1).padStart(3, '0')}`, M + 2, y + 4)
-    sf(9, 'normal', INK2); rl.forEach((l: string, li: number) => tx(l, M + 20, y + 4 + li * 4.5)); y += rh + 2
+    const rl = doc.splitTextToSize(r, CW - 22)
+    const rh = rl.length * 5 + 6
+    need(rh + 2)
+    if (i % 2 === 0) fill(M, y - 2, CW, rh + 2, C.bg2)
+    line(y + rh, '#ebebeb')
+    font(8, 'bold', C.blue); t(`BR-${String(i + 1).padStart(3, '0')}`, M + 2, y + 4)
+    font(10, 'normal', C.ink2); rl.forEach((l: string, li: number) => t(l, M + 22, y + 4 + li * 5))
+    y += rh + 2
   }); y += 10
 
-  // 11. Out of Scope
-  checkY(20); secHeader('11', 'Out of Scope — Version 1.0')
-  const oos = ['Native mobile applications (web-responsive only)', 'Third-party plugin or marketplace system', 'Multi-language / i18n support', 'Advanced AI/ML beyond core scope', 'Custom on-premise deployment']
+  // ════════════════════════════════════════════════════════════════
+  // SECTION 11 — Out of Scope
+  // ════════════════════════════════════════════════════════════════
+  need(20); secHead('11', 'Out of Scope - Version 1.0')
+  const oos = [
+    'Native mobile applications (web-responsive design only)',
+    'Third-party plugin or marketplace system',
+    'Multi-language and internationalization support',
+    'Advanced AI or ML capabilities beyond core product scope',
+    'Custom on-premise or self-hosted deployment options',
+  ]
   oos.forEach(item => {
-    checkY(10); strokeRect(M, y - 2, CW, 9, '#fef2f2', '#fecaca', 1.5)
-    sf(10, 'bold', RED); tx('-', M + 3, y + 3.5); sf(9, 'normal', RED); tx(item, M + 10, y + 3.5); y += 11
+    need(10)
+    box(M, y - 2, CW, 9, C.redBg, C.redBorder, 1.5)
+    font(10, 'bold', C.red); t('x', M + 3.5, y + 3.8)
+    font(9, 'normal', C.red); t(item, M + 10, y + 3.8)
+    y += 11
   }); y += 8
 
-  // 12. Assumptions
-  checkY(20); secHeader('12', 'Assumptions & Dependencies')
-  const assumptions = (blueprint.system_boundaries || []).length > 0 ? blueprint.system_boundaries
-    : ['Users access via a modern web browser.', 'Third-party APIs maintain backward compatibility during development.', 'Infrastructure provisioned on a major cloud provider.', 'Development follows standard agile practices.', 'Legal review completed before production launch.']
+  // ════════════════════════════════════════════════════════════════
+  // SECTION 12 — Assumptions
+  // ════════════════════════════════════════════════════════════════
+  need(20); secHead('12', 'Assumptions & Dependencies')
+  const assumptions = (blueprint.system_boundaries || []).length > 0
+    ? blueprint.system_boundaries
+    : [
+        'Users access the product via a modern web browser.',
+        'Third-party services and APIs maintain backward compatibility during development.',
+        'Infrastructure will be provisioned on a major cloud provider.',
+        'Development team follows standard agile practices with two-week sprint cycles.',
+        'Legal and compliance review will be conducted before production launch.',
+      ]
+  fill(M, y - 2, CW, 9, C.bg3, 1.5)
+  font(8, 'bold', C.ink3); t('ID', M + 2, y + 4); t('ASSUMPTION', M + 18, y + 4); y += 11
+
   assumptions.forEach((a, i) => {
-    const al = doc.splitTextToSize(a, CW - 18); const ah = al.length * 4.5 + 6
-    checkY(ah + 2)
-    if (i % 2 === 0) { doc.setFillColor(BG2); doc.rect(M, y - 2, CW, ah + 2, 'F') }
-    hline(y + ah, '#f0f0f0')
-    sf(8, 'bold', BLUE); tx(`A${String(i + 1).padStart(2, '0')}`, M + 2, y + 4)
-    sf(9, 'normal', INK2); al.forEach((l: string, li: number) => tx(l, M + 14, y + 4 + li * 4.5)); y += ah + 2
+    const al = doc.splitTextToSize(a, CW - 20)
+    const ah = al.length * 5 + 6
+    need(ah + 2)
+    if (i % 2 === 0) fill(M, y - 2, CW, ah + 2, C.bg2)
+    line(y + ah, '#ebebeb')
+    font(8, 'bold', C.blue); t(`A${String(i + 1).padStart(2, '0')}`, M + 2, y + 4)
+    font(10, 'normal', C.ink2); al.forEach((l: string, li: number) => t(l, M + 18, y + 4 + li * 5))
+    y += ah + 2
   })
 
-  // Footer on every page
+  // ── Footer on every page ──────────────────────────────────────────
   const total = (doc as any).internal.getNumberOfPages()
   for (let p = 1; p <= total; p++) {
     doc.setPage(p)
-    hline(285)
-    sf(8, 'normal', INK4)
-    tx('Generated by cornea.ai', M, 290)
-    tx('Version 1.0 · CONFIDENTIAL', W / 2, 290, { align: 'center' } as any)
-    tx(`${p} / ${total}`, W - M, 290, { align: 'right' } as any)
+    line(286); font(8, 'normal', C.ink4)
+    t('Generated by cornea.ai', M, 291)
+    t('Version 1.0  |  CONFIDENTIAL', W / 2, 291, { align: 'center' } as any)
+    t(`${p} / ${total}`, W - M, 291, { align: 'right' } as any)
   }
 
-  doc.save(`prd-${idea.slice(0, 30).replace(/\s+/g, '-').toLowerCase()}.pdf`)
+  doc.save(`prd-${idea.slice(0, 30).replace(/[^a-z0-9]/gi, '-').toLowerCase()}.pdf`)
 }

@@ -92,6 +92,7 @@ export default function Home() {
           blueprint={blueprint}
           idea={idea}
           onClose={() => setShowGraph(false)}
+          onBlueprintUpdate={(updated) => setBlueprint(updated)}
         />
       )}
     </div>

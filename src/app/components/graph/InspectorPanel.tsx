@@ -1,14 +1,16 @@
 'use client'
 import { useState } from 'react'
-import { GraphNodeData, NodeLayer, Blueprint } from '../../types'
+import { GraphNodeData, NodeLayer, Blueprint, ArchitectureDecision } from '../../types'
 
 interface InspectorPanelProps {
   node: GraphNodeData | null
   blueprint: Blueprint
   onClose: () => void
+  onApplyChoice: (constraint: string) => void
+  applying: boolean
 }
 
-type TabId = 'overview' | 'purpose' | 'apis' | 'data' | 'dependencies' | 'jobs'
+type TabId = 'overview' | 'purpose' | 'apis' | 'data' | 'dependencies' | 'jobs' | 'tradeoffs'
 
 interface Tab {
   id: TabId
@@ -70,8 +72,23 @@ const LAYER_COLORS: Record<NodeLayer, string> = {
   integration: '#c080f8',
 }
 
-export function InspectorPanel({ node, blueprint, onClose }: InspectorPanelProps) {
-  const tabs = node ? getTabsForLayer(node.layer) : []
+export function InspectorPanel({ node, blueprint, onClose, onApplyChoice, applying }: InspectorPanelProps) {
+  const [selectedAlt, setSelectedAlt] = useState<string | null>(null)
+
+  // Find a matching architecture decision for this node, if one exists
+  const matchedDecision: ArchitectureDecision | undefined = node
+    ? (blueprint.architecture_decisions || []).find(d =>
+        d.node_target?.toLowerCase() === node.label?.toLowerCase() ||
+        d.node_target?.toLowerCase().includes(node.label?.toLowerCase()) ||
+        node.label?.toLowerCase().includes(d.node_target?.toLowerCase())
+      )
+    : undefined
+
+  const baseTabs = node ? getTabsForLayer(node.layer) : []
+  const tabs: Tab[] = matchedDecision
+    ? [...baseTabs, { id: 'tradeoffs' as TabId, label: 'Tradeoffs' }]
+    : baseTabs
+
   const [activeTab, setActiveTab] = useState<TabId>(tabs[0]?.id || 'overview')
 
   // Reset to first tab when node changes
@@ -375,6 +392,91 @@ export function InspectorPanel({ node, blueprint, onClose }: InspectorPanelProps
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* TRADEOFFS */}
+        {currentTab === 'tradeoffs' && matchedDecision && (
+          <div className="space-y-4">
+            <p className="text-[10px] uppercase tracking-widest font-medium" style={{ color: 'rgba(255,255,255,0.22)' }}>
+              {matchedDecision.decision_title}
+            </p>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setSelectedAlt(null)}
+                className="text-[12px] px-3 py-1.5 rounded-full font-medium transition-all"
+                style={{
+                  background: selectedAlt === null ? `${accentColor}28` : 'rgba(255,255,255,0.04)',
+                  border: `1px solid ${selectedAlt === null ? accentColor : 'rgba(255,255,255,0.1)'}`,
+                  color: selectedAlt === null ? accentColor : 'rgba(255,255,255,0.45)',
+                }}
+              >
+                ✓ {matchedDecision.chosen.name} (current)
+              </button>
+              {matchedDecision.alternatives.map((alt, i) => (
+                <button
+                  key={i}
+                  onClick={() => setSelectedAlt(alt.name)}
+                  className="text-[12px] px-3 py-1.5 rounded-full font-medium transition-all"
+                  style={{
+                    background: selectedAlt === alt.name ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${selectedAlt === alt.name ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                    color: selectedAlt === alt.name ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.45)',
+                  }}
+                >
+                  {alt.name}
+                </button>
+              ))}
+            </div>
+
+            {selectedAlt === null ? (
+              <div className="p-4 rounded-xl" style={{ background: `${accentColor}10`, border: `1px solid ${accentColor}28` }}>
+                <p className="text-[12px] font-semibold mb-2" style={{ color: accentColor }}>
+                  Why {matchedDecision.chosen.name}
+                </p>
+                <p className="text-[13px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                  {matchedDecision.chosen.reasoning}
+                </p>
+              </div>
+            ) : (
+              (() => {
+                const alt = matchedDecision.alternatives.find(a => a.name === selectedAlt)
+                if (!alt) return null
+                return (
+                  <div className="space-y-3">
+                    <div className="p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      <p className="text-[12px] font-semibold mb-2" style={{ color: 'rgba(255,255,255,0.8)' }}>
+                        Why {alt.name} was considered
+                      </p>
+                      <p className="text-[13px] leading-relaxed mb-3" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                        {alt.reasoning}
+                      </p>
+                      <div className="pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                        <p className="text-[11px] uppercase tracking-widest font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                          What would change
+                        </p>
+                        <p className="text-[13px] leading-relaxed" style={{ color: 'rgba(240,168,96,0.85)' }}>
+                          {alt.tradeoff}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => onApplyChoice(`Use ${alt.name} instead of ${matchedDecision.chosen.name} for ${matchedDecision.decision_title}.`)}
+                      disabled={applying}
+                      className="w-full py-3 rounded-xl text-[13px] font-medium transition-all"
+                      style={{
+                        background: applying ? 'rgba(255,255,255,0.06)' : 'linear-gradient(135deg, #4a7cf0, #7c5cf0)',
+                        color: applying ? 'rgba(255,255,255,0.4)' : '#fff',
+                      }}
+                    >
+                      {applying ? '⏳ Applying & regenerating...' : `Apply ${alt.name} and regenerate`}
+                    </button>
+                  </div>
+                )
+              })()
             )}
           </div>
         )}

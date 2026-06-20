@@ -184,7 +184,7 @@ export function Results({ blueprint: initial, idea, onNewIdea, onViewGraph, onRe
               <line x1="3" y1="5" x2="8" y2="11" stroke="white" strokeWidth="1.3"/>
               <line x1="13" y1="5" x2="8" y2="11" stroke="white" strokeWidth="1.3"/>
             </svg>
-            View Graph
+            View System
           </button>
 
           <button onClick={() => setShowRegenerate(true)}

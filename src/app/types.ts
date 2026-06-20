@@ -73,6 +73,21 @@ export interface SystemFlowStep {
   action: string
 }
 
+// ── Architecture Decisions (Agent 5) ──────────────────────────────────────────
+export interface ArchitectureAlternative {
+  name: string
+  reasoning: string
+  tradeoff: string
+}
+
+export interface ArchitectureDecision {
+  decision_id: string
+  node_target: string
+  decision_title: string
+  chosen: { name: string; reasoning: string }
+  alternatives: ArchitectureAlternative[]
+}
+
 // ── Full Blueprint ────────────────────────────────────────────────────────────
 export interface Blueprint {
   // Agent 1 — Discovery
@@ -99,6 +114,9 @@ export interface Blueprint {
   feature_breakdown: FeatureBreakdown[]
   system_flow: SystemFlowStep[]
   architecture_diagram_mermaid: string
+
+  // Agent 5 — Architecture Reasoning
+  architecture_decisions: ArchitectureDecision[]
 }
 
 // ── Graph Node Types ──────────────────────────────────────────────────────────

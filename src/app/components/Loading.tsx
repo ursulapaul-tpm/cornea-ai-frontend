@@ -7,6 +7,7 @@ interface LoadingProps {
   error: string | null
   onLogoClick?: () => void
   onCancel?: () => void
+  highlights?: string[]
 }
 
 const AGENTS = [
@@ -145,7 +146,7 @@ function SpiralCanvas({ activeAgent }: { activeAgent: number }) {
   return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.9 }} />
 }
 
-export function Loading({ idea, activeAgent, error, onLogoClick, onCancel }: LoadingProps) {
+export function Loading({ idea, activeAgent, error, onLogoClick, onCancel, highlights = [] }: LoadingProps) {
   const progress = activeAgent >= 0 ? Math.min((activeAgent / AGENTS.length) * 100, 100) : 0
   const label = activeAgent >= 0 && activeAgent < AGENTS.length
     ? MESSAGES[activeAgent]
@@ -252,6 +253,22 @@ export function Loading({ idea, activeAgent, error, onLogoClick, onCancel }: Loa
               )
             })}
           </div>
+
+          {/* Live highlights feed */}
+          {highlights.length > 0 && (
+            <div className="mb-6 max-w-[420px] mx-auto rounded-xl px-4 py-3 overflow-hidden"
+              style={{ background: 'rgba(74,124,240,0.04)', border: '1px solid rgba(74,124,240,0.12)', maxHeight: 92 }}>
+              <div className="flex flex-col gap-1.5">
+                {highlights.slice(-3).map((h, i) => (
+                  <div key={`${h}-${i}`} className="flex items-center gap-2 animate-fade-in"
+                    style={{ animationDuration: '0.4s' }}>
+                    <span style={{ color: '#3dd4a0', fontSize: 10, flexShrink: 0 }}>●</span>
+                    <span className="text-[11.5px] truncate" style={{ color: 'rgba(255,255,255,0.55)' }}>{h}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Progress bar */}
           <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl max-w-[420px] mx-auto"

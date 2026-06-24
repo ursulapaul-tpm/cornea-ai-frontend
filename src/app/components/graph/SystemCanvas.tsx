@@ -11,6 +11,8 @@ import {
   BackgroundVariant,
   ReactFlowProvider,
 } from '@xyflow/react'
+// Ignore missing type declarations for side-effect CSS import
+// @ts-ignore
 import '@xyflow/react/dist/style.css'
 import { Blueprint, GraphNodeData } from '../../types'
 import { buildGraphFromBlueprint, highlightNodeEdges } from './buildGraph'
@@ -60,7 +62,7 @@ function Canvas({ blueprint, idea, onClose, onBlueprintUpdate }: SystemCanvasPro
   }, [initialEdges, setNodes, setEdges])
 
   const onNodeClick: NodeMouseHandler = useCallback((_, node) => {
-    const data = node.data as GraphNodeData
+    const data = node.data as unknown as GraphNodeData
     setSelectedNode(data)
     setInspectorOpen(true)
     applyFocus(node.id)
@@ -197,7 +199,7 @@ function Canvas({ blueprint, idea, onClose, onBlueprintUpdate }: SystemCanvasPro
             <MiniMap
               style={{ background: 'rgba(10,10,26,0.9)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10 }}
               nodeColor={n => {
-                const d = n.data as GraphNodeData
+                const d = n.data as unknown as GraphNodeData
                 if (d?.layer === 'user') return '#4a7cf0'
                 if (d?.layer === 'auth') return '#5468d4'
                 if (d?.layer === 'database') return '#0db882'

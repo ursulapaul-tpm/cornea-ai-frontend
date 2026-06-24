@@ -23,7 +23,7 @@ const LAYER_ICONS: Record<NodeLayer, string> = {
 }
 
 export function SystemNode({ data, selected }: NodeProps) {
-  const nodeData = data as GraphNodeData
+  const nodeData = data as unknown as GraphNodeData
   const style = LAYER_STYLES[nodeData.layer] || LAYER_STYLES['core-service']
   const icon = LAYER_ICONS[nodeData.layer] || '◆'
 

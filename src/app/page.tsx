@@ -4,6 +4,7 @@ import { Landing } from './components/Landing'
 import { Loading } from './components/Loading'
 import { Results } from './components/Results'
 import { History } from './components/History'
+import { FeedbackWidget } from './components/FeedbackWidget'
 import { SystemCanvas } from './components/graph/SystemCanvas'
 import { Blueprint, AppScreen } from './types'
 import { getDeviceId } from './utils/deviceId'
@@ -121,6 +122,8 @@ export default function Home() {
           onBlueprintUpdate={(updated) => setBlueprint(updated)}
         />
       )}
+
+      <FeedbackWidget />
     </div>
   )
 }

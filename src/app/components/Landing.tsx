@@ -196,7 +196,7 @@ export function Landing({ onSubmit, onViewHistory }: LandingProps) {
   }
 
   return (
-    <div className="relative flex flex-col overflow-hidden" style2="height:100vh"
+    <div className="relative flex flex-col overflow-hidden"
       style={{ background: '#05050f', height: '100vh', maxHeight: '100vh' }}>
 
       {/* Spiral background */}

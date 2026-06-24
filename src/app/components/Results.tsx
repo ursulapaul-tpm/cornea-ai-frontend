@@ -89,7 +89,7 @@ function EditableList({ items, onChange, color = '#7aa8f8', bg = 'rgba(74,124,24
   )
 }
 
-function SLabel({ children }: { children: string }) {
+function SLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-[10px] uppercase tracking-[0.16em] font-semibold mb-3 mt-6 first:mt-0" style={{ color: 'rgba(255,255,255,0.25)' }}>{children}</p>
 }
 

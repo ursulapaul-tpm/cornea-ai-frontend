@@ -34,7 +34,7 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
         user,
         expanded: false,
         children: [],
-      } as GraphNodeData,
+      } as unknown as Record<string, unknown>,
     })
   })
 
@@ -57,7 +57,7 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
       service: authService,
       expanded: false,
       children: [],
-    } as GraphNodeData,
+    } as unknown as Record<string, unknown>,
   })
 
   // Connect all users to auth
@@ -96,7 +96,7 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
         service: svc,
         expanded: false,
         children: [],
-      } as GraphNodeData,
+      } as unknown as Record<string, unknown>,
     })
     rawEdges.push({
       id: `auth-to-${id}`,
@@ -122,7 +122,7 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
         service: svc,
         expanded: false,
         children: [],
-      } as GraphNodeData,
+      } as unknown as Record<string, unknown>,
     })
     const parentId = mainServices.length > 0
       ? serviceIdMap[mainServices[Math.floor(i * mainServices.length / Math.max(supportServices.length, 1))]?.name] || `service-0`
@@ -149,7 +149,7 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
       layer: 'database' as NodeLayer,
       expanded: false,
       children: [],
-    } as GraphNodeData,
+    } as unknown as Record<string, unknown>,
   })
 
   mainServices.forEach((_, i) => {
@@ -177,7 +177,7 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
         integration: int,
         expanded: false,
         children: [],
-      } as GraphNodeData,
+      } as unknown as Record<string, unknown>,
     })
     const srcIdx = Math.min(i, mainServices.length - 1)
     const srcId = mainServices.length > 0 ? `service-${srcIdx}` : authId

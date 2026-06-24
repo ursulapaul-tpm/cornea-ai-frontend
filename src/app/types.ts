@@ -153,4 +153,12 @@ export interface InspectorState {
 }
 
 // ── App Screens ───────────────────────────────────────────────────────────────
-export type AppScreen = 'landing' | 'loading' | 'canvas'
+export type AppScreen = 'landing' | 'loading' | 'canvas' | 'history'
+
+// ── History ───────────────────────────────────────────────────────────────────
+export interface HistoryItem {
+  id: number
+  idea: string
+  blueprint: Blueprint
+  createdAt: string
+}

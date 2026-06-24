@@ -1,20 +1,6 @@
 'use client'
 import { useEffect, useRef } from 'react'
 
-const AGENTS = [
-  { name: 'Discovery Agent', desc: 'Mapping users, problems & business goals' },
-  { name: 'Workflow & Domain Agent', desc: 'Defining journeys, entities & rules' },
-  { name: 'Architecture Agent', desc: 'Designing services, APIs & boundaries' },
-  { name: 'Documentation Agent', desc: 'Writing PRD, features & system flow' },
-]
-
-const MESSAGES = [
-  'Understanding your product...',
-  'Mapping users and workflows...',
-  'Designing system architecture...',
-  'Writing documentation & PRD...',
-]
-
 interface LoadingProps {
   idea: string
   activeAgent: number
@@ -23,14 +9,92 @@ interface LoadingProps {
   onCancel?: () => void
 }
 
-interface SpiralProps {
-  activeAgent: number
+const AGENTS = [
+  {
+    name: 'Discovery',
+    desc: 'Users, problems & business goals extracted',
+    icon: (color: string) => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <circle cx="9" cy="8" r="3" stroke={color} strokeWidth="1.6"/>
+        <path d="M4 19c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+        <circle cx="17" cy="9" r="2.3" stroke={color} strokeWidth="1.6"/>
+        <path d="M14.5 19c0-2.2 1.6-4 3.7-4.3" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    name: 'Workflows',
+    desc: 'Journeys, entities & domain rules mapped',
+    icon: (color: string) => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <circle cx="6" cy="6" r="2.3" stroke={color} strokeWidth="1.6"/>
+        <circle cx="6" cy="18" r="2.3" stroke={color} strokeWidth="1.6"/>
+        <circle cx="18" cy="12" r="2.3" stroke={color} strokeWidth="1.6"/>
+        <path d="M8 7l8 4M8 17l8-4" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    name: 'Architecture',
+    desc: 'Modules, APIs & system design defined',
+    icon: (color: string) => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <rect x="4" y="4" width="16" height="5" rx="1.3" stroke={color} strokeWidth="1.6"/>
+        <rect x="4" y="11" width="16" height="5" rx="1.3" stroke={color} strokeWidth="1.6"/>
+        <circle cx="7.5" cy="6.5" r="0.8" fill={color}/>
+        <circle cx="7.5" cy="13.5" r="0.8" fill={color}/>
+        <path d="M4 19h16" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    name: 'Documentation',
+    desc: 'PRD, features & architecture diagram',
+    icon: (color: string) => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <rect x="5" y="3.5" width="14" height="17" rx="1.5" stroke={color} strokeWidth="1.6"/>
+        <path d="M8.5 8h7M8.5 12h7M8.5 16h4.5" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    name: 'Reasoning',
+    desc: 'Tradeoffs & architecture decisions explained',
+    icon: (color: string) => (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M12 3a6 6 0 0 0-3.5 10.9c.3.2.5.6.5 1v1.1h6v-1.1c0-.4.2-.8.5-1A6 6 0 0 0 12 3z" stroke={color} strokeWidth="1.6"/>
+        <path d="M9.5 19h5M10.3 21h3.4" stroke={color} strokeWidth="1.6" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+]
+
+const MESSAGES = [
+  'Understanding your product...',
+  'Mapping users and workflows...',
+  'Designing system architecture...',
+  'Writing documentation & PRD...',
+  'Weighing architecture tradeoffs...',
+]
+
+function WaveBars({ color }: { color: string }) {
+  const heights = [5, 11, 15, 9, 6, 13, 5]
+  return (
+    <div className="flex items-end gap-[2px]" style={{ height: 16 }}>
+      {heights.map((h, j) => (
+        <div key={j} style={{
+          width: 2.5, height: h, borderRadius: 3,
+          background: `linear-gradient(to top, ${color}, ${color}cc)`,
+          animation: `wv 0.65s ease-in-out ${j * 0.09}s infinite`,
+        }} />
+      ))}
+    </div>
+  )
 }
 
-function SpiralCanvas({ activeAgent }: SpiralProps) {
+function SpiralCanvas({ activeAgent }: { activeAgent: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const activeRef = useRef(activeAgent)
-
   useEffect(() => { activeRef.current = activeAgent }, [activeAgent])
 
   useEffect(() => {
@@ -38,12 +102,8 @@ function SpiralCanvas({ activeAgent }: SpiralProps) {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-
     let t = 0
     let animFrame: number
-
-    // Completed node positions (locked dots on rings)
-    const completedNodes: { ring: number; angle: number; color: string; opacity: number }[] = []
 
     const resize = () => {
       canvas.width = canvas.offsetWidth * window.devicePixelRatio
@@ -54,148 +114,56 @@ function SpiralCanvas({ activeAgent }: SpiralProps) {
     window.addEventListener('resize', resize)
 
     const draw = () => {
-      const W = canvas.offsetWidth
-      const H = canvas.offsetHeight
+      const W = canvas.offsetWidth, H = canvas.offsetHeight
       ctx.clearRect(0, 0, W, H)
-
-      const cx = W / 2
-      const cy = H / 2
+      const cx = W / 2, cy = H / 2
       const active = activeRef.current
-
-      // Speed increases as agents complete
-      const speedMult = 1 + (active < 0 ? 0 : active) * 0.35
-
+      const speedMult = 1 + (active < 0 ? 0 : active) * 0.25
       const rings = [
-        { r: Math.min(W, H) * 0.38, lines: 72, speed: 0.0009 * speedMult, color: 'rgba(74,124,240,', baseOp: 0.12 },
-        { r: Math.min(W, H) * 0.30, lines: 56, speed: -0.0013 * speedMult, color: 'rgba(124,92,240,', baseOp: 0.10 },
-        { r: Math.min(W, H) * 0.22, lines: 40, speed: 0.0018 * speedMult, color: 'rgba(74,124,240,', baseOp: 0.09 },
-        { r: Math.min(W, H) * 0.15, lines: 28, speed: -0.0024 * speedMult, color: 'rgba(13,184,130,', baseOp: 0.10 },
-        { r: Math.min(W, H) * 0.08, lines: 18, speed: 0.003 * speedMult, color: 'rgba(124,92,240,', baseOp: 0.12 },
+        { r: Math.min(W, H) * 0.42, lines: 64, speed: 0.0008 * speedMult, color: 'rgba(74,124,240,', baseOp: 0.08 },
+        { r: Math.min(W, H) * 0.30, lines: 48, speed: -0.0012 * speedMult, color: 'rgba(124,92,240,', baseOp: 0.07 },
+        { r: Math.min(W, H) * 0.18, lines: 32, speed: 0.0016 * speedMult, color: 'rgba(13,184,130,', baseOp: 0.07 },
       ]
-
-      // Brightness increases with progress
-      const brightMult = 1 + (active < 0 ? 0 : Math.min(active, 4)) * 0.2
-
-      rings.forEach((ring, ri) => {
+      rings.forEach(ring => {
         const angle = t * ring.speed * 1000
         for (let i = 0; i < ring.lines; i++) {
           const a = (i / ring.lines) * Math.PI * 2 + angle
-          const x = cx + Math.cos(a) * ring.r
-          const y = cy + Math.sin(a) * ring.r
-          const ix = cx + Math.cos(a) * ring.r * 0.1
-          const iy = cy + Math.sin(a) * ring.r * 0.1
-          const op = (ring.baseOp + 0.06 * Math.sin(a * 4 + t * 0.002)) * brightMult
-          ctx.beginPath()
-          ctx.moveTo(ix, iy)
-          ctx.lineTo(x, y)
-          ctx.strokeStyle = `${ring.color}${Math.min(op, 0.45)})`
-          ctx.lineWidth = 0.55
-          ctx.stroke()
+          const x = cx + Math.cos(a) * ring.r, y = cy + Math.sin(a) * ring.r
+          const ix = cx + Math.cos(a) * ring.r * 0.1, iy = cy + Math.sin(a) * ring.r * 0.1
+          const op = ring.baseOp + 0.04 * Math.sin(a * 4 + t * 0.002)
+          ctx.beginPath(); ctx.moveTo(ix, iy); ctx.lineTo(x, y)
+          ctx.strokeStyle = `${ring.color}${Math.max(op, 0.02)})`; ctx.lineWidth = 0.5; ctx.stroke()
         }
-
-        // Ring outline
-        ctx.beginPath()
-        ctx.arc(cx, cy, ring.r, 0, Math.PI * 2)
-        ctx.strokeStyle = `${ring.color}${0.05 * brightMult})`
-        ctx.lineWidth = 0.5
-        ctx.stroke()
       })
-
-      // Add completed node dots when agent finishes
-      const targetNodes = active < 0 ? 0 : Math.min(active, 4)
-      while (completedNodes.length < targetNodes) {
-        const ri = completedNodes.length % rings.length
-        const colors = ['#4a7cf0', '#7c5cf0', '#0db882', '#4a7cf0']
-        completedNodes.push({
-          ring: ri,
-          angle: Math.random() * Math.PI * 2,
-          color: colors[completedNodes.length % colors.length],
-          opacity: 0,
-        })
-      }
-
-      // Draw + fade in completed nodes
-      completedNodes.forEach((node, ni) => {
-        node.opacity = Math.min(1, node.opacity + 0.02)
-        const ring = rings[node.ring]
-        const angle = node.angle + t * ring.speed * 1000
-        const x = cx + Math.cos(angle) * ring.r
-        const y = cy + Math.sin(angle) * ring.r
-
-        // Glow
-        const grad = ctx.createRadialGradient(x, y, 0, x, y, 10)
-        grad.addColorStop(0, `${node.color}${(0.6 * node.opacity).toFixed(2).replace('0.', '').padStart(2, '0')}`)
-        grad.addColorStop(1, `${node.color}00`)
-        ctx.beginPath()
-        ctx.arc(x, y, 10, 0, Math.PI * 2)
-        ctx.fillStyle = grad
-        ctx.fill()
-
-        // Dot
-        ctx.beginPath()
-        ctx.arc(x, y, 3, 0, Math.PI * 2)
-        ctx.fillStyle = node.color
-        ctx.globalAlpha = node.opacity
-        ctx.fill()
-        ctx.globalAlpha = 1
-      })
-
-      // Center glow — pulses with progress
-      const glowR = 60 + (active < 0 ? 0 : active) * 10
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR)
-      grad.addColorStop(0, `rgba(74,124,240,${0.1 * brightMult})`)
-      grad.addColorStop(0.5, `rgba(124,92,240,${0.05 * brightMult})`)
-      grad.addColorStop(1, 'rgba(0,0,0,0)')
-      ctx.beginPath()
-      ctx.arc(cx, cy, glowR, 0, Math.PI * 2)
-      ctx.fillStyle = grad
-      ctx.fill()
-
       t++
       animFrame = requestAnimationFrame(draw)
     }
-
     draw()
-    return () => {
-      cancelAnimationFrame(animFrame)
-      window.removeEventListener('resize', resize)
-    }
+    return () => { cancelAnimationFrame(animFrame); window.removeEventListener('resize', resize) }
   }, [])
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 w-full h-full pointer-events-none"
-      style={{ opacity: 0.95 }}
-    />
-  )
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" style={{ opacity: 0.9 }} />
 }
 
 export function Loading({ idea, activeAgent, error, onLogoClick, onCancel }: LoadingProps) {
-  const progress = activeAgent >= 0 ? Math.min((activeAgent / 4) * 100, 100) : 0
-  const label = activeAgent >= 0 && activeAgent < 4
+  const progress = activeAgent >= 0 ? Math.min((activeAgent / AGENTS.length) * 100, 100) : 0
+  const label = activeAgent >= 0 && activeAgent < AGENTS.length
     ? MESSAGES[activeAgent]
-    : activeAgent === 4 ? 'Blueprint ready!' : 'Initializing...'
+    : activeAgent >= AGENTS.length ? 'Blueprint ready!' : 'Initializing...'
 
   return (
     <div className="flex flex-col relative" style={{ height: '100vh', background: '#05050f', overflow: 'hidden' }}>
-
-      {/* Full-screen spiral */}
       <SpiralCanvas activeAgent={activeAgent} />
-
-      {/* Center radial overlay so content stays readable */}
       <div className="absolute inset-0 pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse 55% 65% at 50% 50%, rgba(5,5,15,0.88) 0%, rgba(5,5,15,0.55) 55%, rgba(5,5,15,0.1) 100%)' }} />
+        style={{ background: 'radial-gradient(ellipse 60% 65% at 50% 50%, rgba(5,5,15,0.9) 0%, rgba(5,5,15,0.6) 55%, rgba(5,5,15,0.15) 100%)' }} />
 
       {/* Nav */}
       <nav className="relative z-10 flex-shrink-0 flex items-center justify-between px-8 py-5">
         <button onClick={onLogoClick} className="flex items-center gap-2 transition-opacity hover:opacity-70">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #4a7cf0, #7c5cf0)' }}>
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #4a7cf0, #7c5cf0)' }}>
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <ellipse cx="8" cy="8" rx="7" ry="4.5" stroke="white" strokeWidth="1.3"/>
               <circle cx="8" cy="8" r="2.2" fill="white"/>
-              <circle cx="8.7" cy="7.3" r="0.65" fill="rgba(74,124,240,0.5)"/>
             </svg>
           </div>
           <span className="text-[14px] font-medium" style={{ color: 'rgba(255,255,255,0.9)' }}>cornea.ai</span>
@@ -206,102 +174,93 @@ export function Loading({ idea, activeAgent, error, onLogoClick, onCancel }: Loa
         </div>
       </nav>
 
-      {/* Main content */}
+      {/* Main */}
       <div className="relative z-10 flex-1 flex items-center justify-center px-8" style={{ overflow: 'hidden' }}>
-        <div className="w-full max-w-[500px]">
+        <div className="w-full max-w-[640px]">
 
-          {/* Header */}
           <div className="text-center mb-7">
-            <p className="text-[11px] uppercase tracking-[0.22em] mb-3 font-medium"
-              style={{ color: 'rgba(74,124,240,0.65)' }}>
+            <p className="text-[11px] uppercase tracking-[0.22em] mb-3 font-medium" style={{ color: 'rgba(74,124,240,0.65)' }}>
               cornea is thinking in systems
             </p>
-            <h2 className="text-[24px] font-semibold mb-3 transition-all duration-500"
-              style={{ color: 'rgba(255,255,255,0.92)' }}>
-              {label}
-            </h2>
+            <h2 className="text-[22px] font-semibold mb-3" style={{ color: 'rgba(255,255,255,0.92)' }}>{label}</h2>
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-[12px]"
-              style={{
-                background: 'rgba(74,124,240,0.08)',
-                border: '1px solid rgba(74,124,240,0.18)',
-                color: 'rgba(255,255,255,0.45)',
-              }}>
+              style={{ background: 'rgba(74,124,240,0.08)', border: '1px solid rgba(74,124,240,0.18)', color: 'rgba(255,255,255,0.45)' }}>
               <span style={{ color: 'rgba(74,124,240,0.75)' }}>💡</span>
-              <span className="truncate max-w-[320px]">{idea}</span>
+              <span className="truncate max-w-[420px]">{idea}</span>
             </div>
           </div>
 
-          {/* Agent cards */}
-          <div className="flex flex-col gap-2 mb-5">
-            {AGENTS.map((agent, i) => {
+          {/* Card grid — 3 + 2 */}
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            {AGENTS.slice(0, 3).map((agent, i) => {
               const state = i < activeAgent ? 'done' : i === activeAgent ? 'active' : 'waiting'
+              const color = state === 'active' ? '#7aa8f8' : state === 'done' ? '#3dd4a0' : 'rgba(255,255,255,0.3)'
               return (
                 <div key={i}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-500"
+                  className="rounded-2xl p-4 transition-all duration-500"
                   style={{
-                    background: state === 'active'
-                      ? 'rgba(74,124,240,0.1)'
-                      : state === 'done'
-                      ? 'rgba(13,184,130,0.07)'
-                      : 'rgba(255,255,255,0.025)',
-                    border: `1px solid ${
-                      state === 'active' ? 'rgba(74,124,240,0.3)'
-                      : state === 'done' ? 'rgba(13,184,130,0.22)'
-                      : 'rgba(255,255,255,0.06)'}`,
-                    opacity: state === 'waiting' ? 0.32 : 1,
-                    transform: state === 'active' ? 'translateX(4px)' : 'translateX(0)',
-                  }}>
-
-                  {/* Number / check */}
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold flex-shrink-0 transition-all duration-500"
-                    style={{
-                      background: state === 'active' ? 'rgba(74,124,240,0.28)' : state === 'done' ? 'rgba(13,184,130,0.22)' : 'rgba(255,255,255,0.06)',
-                      color: state === 'active' ? '#7aa8f8' : state === 'done' ? '#3dd4a0' : 'rgba(255,255,255,0.22)',
-                    }}>
-                    {state === 'done' ? '✓' : i + 1}
+                    background: state === 'active' ? 'rgba(74,124,240,0.08)' : state === 'done' ? 'rgba(13,184,130,0.05)' : 'rgba(255,255,255,0.025)',
+                    border: `1px solid ${state === 'active' ? 'rgba(74,124,240,0.3)' : state === 'done' ? 'rgba(13,184,130,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                    opacity: state === 'waiting' ? 0.45 : 1,
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    {agent.icon(color)}
+                    {state === 'active' && <WaveBars color="#4a7cf0" />}
+                    {state === 'done' && <span style={{ color: '#3dd4a0', fontSize: 14 }}>✓</span>}
                   </div>
-
-                  {/* Text */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-medium transition-colors duration-500"
-                      style={{ color: state === 'active' ? 'rgba(255,255,255,0.92)' : state === 'done' ? 'rgba(255,255,255,0.48)' : 'rgba(255,255,255,0.22)' }}>
-                      {agent.name}
-                    </p>
-                    <p className="text-[11px] mt-0.5 transition-colors duration-500"
-                      style={{ color: state === 'active' ? 'rgba(74,124,240,0.75)' : state === 'done' ? 'rgba(13,184,130,0.55)' : 'rgba(255,255,255,0.13)' }}>
-                      {agent.desc}
-                    </p>
+                  <p className="text-[14px] font-semibold mb-1"
+                    style={{ color: state === 'active' ? 'rgba(255,255,255,0.92)' : state === 'done' ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.35)' }}>
+                    {agent.name}
+                  </p>
+                  <p className="text-[11px] leading-snug"
+                    style={{ color: state === 'active' ? 'rgba(74,124,240,0.75)' : state === 'done' ? 'rgba(13,184,130,0.55)' : 'rgba(255,255,255,0.18)' }}>
+                    {agent.desc}
+                  </p>
+                </div>
+              )
+            })}
+          </div>
+          <div className="grid grid-cols-2 gap-3 mb-6 max-w-[420px] mx-auto">
+            {AGENTS.slice(3).map((agent, idx) => {
+              const i = idx + 3
+              const state = i < activeAgent ? 'done' : i === activeAgent ? 'active' : 'waiting'
+              const color = state === 'active' ? '#7aa8f8' : state === 'done' ? '#3dd4a0' : 'rgba(255,255,255,0.3)'
+              return (
+                <div key={i}
+                  className="rounded-2xl p-4 transition-all duration-500"
+                  style={{
+                    background: state === 'active' ? 'rgba(74,124,240,0.08)' : state === 'done' ? 'rgba(13,184,130,0.05)' : 'rgba(255,255,255,0.025)',
+                    border: `1px solid ${state === 'active' ? 'rgba(74,124,240,0.3)' : state === 'done' ? 'rgba(13,184,130,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                    opacity: state === 'waiting' ? 0.45 : 1,
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    {agent.icon(color)}
+                    {state === 'active' && <WaveBars color="#4a7cf0" />}
+                    {state === 'done' && <span style={{ color: '#3dd4a0', fontSize: 14 }}>✓</span>}
                   </div>
-
-                  {/* Wave animation */}
-                  <div className="flex-shrink-0 w-9 flex items-center justify-end">
-                    {state === 'active' && (
-                      <div className="flex items-end gap-[2px]" style={{ height: 16 }}>
-                        {[5, 12, 16, 10, 7, 14, 6].map((h, j) => (
-                          <div key={j} style={{
-                            width: 2.5,
-                            height: h,
-                            borderRadius: 3,
-                            background: 'linear-gradient(to top, #4a7cf0, #7aa8f8)',
-                            animation: `wv 0.65s ease-in-out ${j * 0.09}s infinite`,
-                          }} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <p className="text-[14px] font-semibold mb-1"
+                    style={{ color: state === 'active' ? 'rgba(255,255,255,0.92)' : state === 'done' ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.35)' }}>
+                    {agent.name}
+                  </p>
+                  <p className="text-[11px] leading-snug"
+                    style={{ color: state === 'active' ? 'rgba(74,124,240,0.75)' : state === 'done' ? 'rgba(13,184,130,0.55)' : 'rgba(255,255,255,0.18)' }}>
+                    {agent.desc}
+                  </p>
                 </div>
               )
             })}
           </div>
 
-          {/* Progress */}
-          <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl"
+          {/* Progress bar */}
+          <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl max-w-[420px] mx-auto"
             style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div className="w-1.5 h-1.5 rounded-full flex-shrink-0"
               style={{
-                background: activeAgent === 4 ? '#3dd4a0' : '#4a7cf0',
-                animation: activeAgent === 4 ? 'none' : 'pulseDot 1.4s ease-in-out infinite',
-                boxShadow: activeAgent === 4 ? '0 0 8px rgba(13,184,130,0.6)' : '0 0 8px rgba(74,124,240,0.6)',
+                background: activeAgent >= AGENTS.length ? '#3dd4a0' : '#4a7cf0',
+                animation: activeAgent >= AGENTS.length ? 'none' : 'pulseDot 1.4s ease-in-out infinite',
+                boxShadow: activeAgent >= AGENTS.length ? '0 0 8px rgba(13,184,130,0.6)' : '0 0 8px rgba(74,124,240,0.6)',
               }} />
             <span className="flex-1 text-[12px]" style={{ color: 'rgba(255,255,255,0.32)' }}>{label}</span>
             <div className="w-20 h-[3px] rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
@@ -313,8 +272,7 @@ export function Loading({ idea, activeAgent, error, onLogoClick, onCancel }: Loa
             </div>
           </div>
 
-          {/* Cancel button */}
-          {!error && activeAgent >= 0 && activeAgent < 4 && onCancel && (
+          {!error && activeAgent >= 0 && activeAgent < AGENTS.length && onCancel && (
             <div className="mt-4 text-center">
               <button onClick={onCancel}
                 className="text-[12px] px-4 py-2 rounded-xl transition-all"
@@ -326,9 +284,8 @@ export function Loading({ idea, activeAgent, error, onLogoClick, onCancel }: Loa
             </div>
           )}
 
-          {/* Error */}
           {error && (
-            <div className="mt-3 px-4 py-3 rounded-xl text-[13px] leading-relaxed"
+            <div className="mt-3 px-4 py-3 rounded-xl text-[13px] leading-relaxed max-w-[420px] mx-auto"
               style={{ background: 'rgba(226,75,74,0.08)', border: '1px solid rgba(226,75,74,0.2)', color: 'rgba(240,120,120,0.9)' }}>
               {error}
             </div>

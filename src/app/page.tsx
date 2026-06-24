@@ -3,11 +3,13 @@ import { useState } from 'react'
 import { Landing } from './components/Landing'
 import { Loading } from './components/Loading'
 import { Results } from './components/Results'
+import { History } from './components/History'
 import { SystemCanvas } from './components/graph/SystemCanvas'
 import { Blueprint, AppScreen } from './types'
+import { getDeviceId } from './utils/deviceId'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000'
-const AGENT_DURATIONS = [20000, 22000, 20000, 24000]
+const AGENT_DURATIONS = [18000, 20000, 18000, 22000, 14000]
 
 export default function Home() {
   const [screen, setScreen] = useState<AppScreen>('landing')
@@ -26,7 +28,7 @@ export default function Home() {
     setScreen('loading')
 
     const animateAgents = async () => {
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 5; i++) {
         setActiveAgent(i)
         await new Promise(r => setTimeout(r, AGENT_DURATIONS[i]))
       }
@@ -47,8 +49,19 @@ export default function Home() {
 
     try {
       const [data] = await Promise.all([fetchBlueprint(), animateAgents()])
-      setActiveAgent(4)
+      setActiveAgent(5)
       setBlueprint(data)
+
+      // Auto-save to history — fire and forget, don't block the UI on this
+      const deviceId = getDeviceId()
+      fetch(`${BACKEND_URL}/api/history/save`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId, idea: submittedIdea, blueprint: data }),
+      }).catch(() => {
+        // Silently ignore history save failures — not critical to the main flow
+      })
+
       await new Promise(r => setTimeout(r, 600))
       setScreen('canvas')
     } catch (err: any) {
@@ -69,12 +82,25 @@ export default function Home() {
     setShowGraph(false)
   }
 
+  const handleOpenFromHistory = (savedIdea: string, savedBlueprint: Blueprint) => {
+    setIdea(savedIdea)
+    setBlueprint(savedBlueprint)
+    setShowGraph(false)
+    setScreen('canvas')
+  }
+
   return (
     <div style={{ background: '#05050f' }}>
-      {screen === 'landing' && <Landing onSubmit={handleSubmit} />}
+      {screen === 'landing' && (
+        <Landing onSubmit={handleSubmit} onViewHistory={() => setScreen('history')} />
+      )}
 
       {screen === 'loading' && (
         <Loading idea={idea} activeAgent={activeAgent} error={error} onLogoClick={handleReset} onCancel={handleReset} />
+      )}
+
+      {screen === 'history' && (
+        <History onOpenBlueprint={handleOpenFromHistory} onBack={handleReset} />
       )}
 
       {screen === 'canvas' && blueprint && !showGraph && (

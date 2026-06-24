@@ -77,12 +77,21 @@ export function InspectorPanel({ node, blueprint, onClose, onApplyChoice, applyi
 
   // Find a matching architecture decision for this node, if one exists
   const matchedDecision: ArchitectureDecision | undefined = node
-    ? (blueprint.architecture_decisions || []).find(d =>
-        d.node_target?.toLowerCase() === node.label?.toLowerCase() ||
-        d.node_target?.toLowerCase().includes(node.label?.toLowerCase()) ||
-        node.label?.toLowerCase().includes(d.node_target?.toLowerCase())
-      )
+    ? (blueprint.architecture_decisions || []).find(d => {
+        const target = d.node_target?.toLowerCase() || ''
+        const label = node.label?.toLowerCase() || ''
+        if (target === label || target.includes(label) || label.includes(target)) return true
+        if (node.layer === 'database' && (target === 'database' || target.includes('database') || target.includes(label))) return true
+        if (node.layer === 'auth' && (target === 'auth' || target.includes('auth'))) return true
+        return false
+      })
     : undefined
+
+  if (node && typeof window !== 'undefined') {
+    console.log('[Tradeoffs Debug] Node label:', node.label, '| Layer:', node.layer)
+    console.log('[Tradeoffs Debug] Available decisions:', (blueprint.architecture_decisions || []).map(d => d.node_target))
+    console.log('[Tradeoffs Debug] Matched:', matchedDecision?.decision_title || 'none')
+  }
 
   const baseTabs = node ? getTabsForLayer(node.layer) : []
   const tabs: Tab[] = matchedDecision

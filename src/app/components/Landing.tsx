@@ -9,8 +9,13 @@ const EXAMPLES = [
   'A fintech app for freelancers to track income and invoices',
 ]
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000'
+const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt', '.md']
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+
 interface LandingProps {
   onSubmit: (idea: string) => void
+  onViewHistory?: () => void
 }
 
 function SpiralCanvas() {
@@ -107,16 +112,84 @@ function SpiralCanvas() {
   )
 }
 
-export function Landing({ onSubmit }: LandingProps) {
+export function Landing({ onSubmit, onViewHistory }: LandingProps) {
   const [idea, setIdea] = useState('')
   const [focused, setFocused] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [uploadedFile, setUploadedFile] = useState<{ name: string; extractedIdea: string } | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const ext = '.' + file.name.split('.').pop()?.toLowerCase()
+    if (!ALLOWED_EXTENSIONS.includes(ext)) {
+      setUploadError('Unsupported file type. Please upload PDF, DOCX, TXT, or MD.')
+      return
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      setUploadError('File too large. Maximum size is 10MB.')
+      return
+    }
+
+    setUploadError(null)
+    setUploading(true)
+    setUploadedFile(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('document', file)
+
+      const res = await fetch(`${BACKEND_URL}/api/extract-document`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Could not process this document.' }))
+        throw new Error(err.error || 'Could not process this document.')
+      }
+
+      const data = await res.json()
+      setUploadedFile({ name: file.name, extractedIdea: data.extractedIdea })
+    } catch (err: any) {
+      setUploadError(
+        err.message.includes('Failed to fetch')
+          ? 'Could not reach the backend.'
+          : err.message
+      )
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const removeUploadedFile = () => {
+    setUploadedFile(null)
+    setUploadError(null)
+  }
 
   const handleSubmit = () => {
-    const trimmed = idea.trim()
-    if (!trimmed || trimmed.length < 10) return
-    onSubmit(trimmed)
+    const typedIdea = idea.trim()
+
+    if (uploadedFile) {
+      // Combine extracted document idea with any typed context
+      const finalIdea = typedIdea
+        ? `${uploadedFile.extractedIdea}\n\nAdditional context: ${typedIdea}`
+        : uploadedFile.extractedIdea
+      onSubmit(finalIdea)
+      return
+    }
+
+    if (!typedIdea || typedIdea.length < 10) return
+    onSubmit(typedIdea)
   }
+
+  const canSubmit = uploadedFile !== null || idea.trim().length >= 10
 
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSubmit()
@@ -151,6 +224,14 @@ export function Landing({ onSubmit }: LandingProps) {
           </span>
         </div>
         <div className="flex items-center gap-6">
+          {onViewHistory && (
+            <button onClick={onViewHistory} className="text-[13px] transition-colors"
+              style={{ color: 'rgba(255,255,255,0.4)' }}
+              onMouseEnter={e => ((e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.8)')}
+              onMouseLeave={e => ((e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.4)')}>
+              History
+            </button>
+          )}
           <a href="#" className="text-[13px] transition-colors"
             style={{ color: 'rgba(255,255,255,0.4)' }}
             onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.8)')}
@@ -198,11 +279,36 @@ export function Landing({ onSubmit }: LandingProps) {
               backdropFilter: 'blur(16px)',
             }}
           >
+            {/* File chip / upload status */}
+            {(uploadedFile || uploading) && (
+              <div className="px-5 pt-4">
+                {uploading ? (
+                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-[12px]"
+                    style={{ background: 'rgba(74,124,240,0.1)', border: '1px solid rgba(74,124,240,0.2)', color: 'rgba(175,169,236,0.85)' }}>
+                    <div className="w-3 h-3 rounded-full border-2 border-white/15"
+                      style={{ borderTopColor: '#7aa8f8', animation: 'spin 0.7s linear infinite' }} />
+                    Reading document...
+                  </div>
+                ) : uploadedFile ? (
+                  <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-[12px]"
+                    style={{ background: 'rgba(13,184,130,0.1)', border: '1px solid rgba(13,184,130,0.25)', color: '#3dd4a0' }}>
+                    <span>📄</span>
+                    <span className="max-w-[260px] truncate">{uploadedFile.name}</span>
+                    <button onClick={removeUploadedFile}
+                      className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
+                      style={{ color: '#3dd4a0' }}>✕</button>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
             <textarea
               ref={textareaRef}
               className="w-full px-6 pt-5 pb-2 text-[16px] leading-relaxed bg-transparent border-none outline-none resize-none font-sans"
               style={{ color: 'rgba(255,255,255,0.88)', minHeight: 120 }}
-              placeholder="e.g. I want to build a project management tool for remote teams with task tracking, deadlines, and team collaboration..."
+              placeholder={uploadedFile
+                ? "Optional: add extra context or direction for this idea..."
+                : "e.g. I want to build a project management tool for remote teams with task tracking, deadlines, and team collaboration..."}
               rows={4}
               maxLength={2000}
               value={idea}
@@ -213,12 +319,36 @@ export function Landing({ onSubmit }: LandingProps) {
             />
             <div className="flex items-center justify-between px-5 py-3"
               style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-              <span className="text-[12px]" style={{ color: 'rgba(255,255,255,0.22)' }}>
-                {idea.length > 0 ? `${idea.length} / 2000` : '⌘ + Enter to generate'}
-              </span>
+              <div className="flex items-center gap-3">
+                {/* Attach button */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="group relative flex items-center justify-center w-7 h-7 rounded-lg transition-all"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(74,124,240,0.15)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(74,124,240,0.3)' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.05)'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.1)' }}
+                >
+                  <span className="text-[14px]" style={{ color: 'rgba(255,255,255,0.5)' }}>+</span>
+                  <span className="absolute bottom-full left-0 mb-2 px-2.5 py-1.5 rounded-lg text-[11px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+                    style={{ background: 'rgba(20,20,36,0.95)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)' }}>
+                    Upload file: PDF, DOCX, TXT, or MD
+                  </span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.txt,.md"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <span className="text-[12px]" style={{ color: 'rgba(255,255,255,0.22)' }}>
+                  {idea.length > 0 ? `${idea.length} / 2000` : '⌘ + Enter to generate'}
+                </span>
+              </div>
               <button
                 onClick={handleSubmit}
-                disabled={idea.trim().length < 10}
+                disabled={!canSubmit || uploading}
                 className="btn-primary flex items-center gap-2 px-5 py-2 rounded-xl text-[14px]"
               >
                 <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -229,6 +359,14 @@ export function Landing({ onSubmit }: LandingProps) {
               </button>
             </div>
           </div>
+
+          {/* Upload error */}
+          {uploadError && (
+            <div className="mt-2 px-4 py-2.5 rounded-xl text-[12px]"
+              style={{ background: 'rgba(226,75,74,0.08)', border: '1px solid rgba(226,75,74,0.2)', color: 'rgba(240,120,120,0.9)' }}>
+              {uploadError}
+            </div>
+          )}
 
           {/* Example chips */}
           <div className="mt-4 flex flex-wrap gap-2 justify-center">
@@ -264,7 +402,7 @@ export function Landing({ onSubmit }: LandingProps) {
         {/* Stats */}
         <div className="mt-8 animate-fade-up delay-200 flex items-center gap-10">
           {[
-            { num: '4', label: 'AI agents' },
+            { num: '5', label: 'AI agents' },
             { num: '7', label: 'System layers' },
             { num: '10+', label: 'Output fields' },
           ].map((s, i) => (

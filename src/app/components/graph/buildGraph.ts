@@ -1,3 +1,4 @@
+import dagre from 'dagre'
 import { Node, Edge } from '@xyflow/react'
 import { Blueprint, GraphNodeData, NodeLayer } from '../../types'
 
@@ -6,40 +7,26 @@ const EDGE_STYLE = {
   strokeWidth: 1.5,
 }
 
-const ACTIVE_EDGE_STYLE = {
-  stroke: 'rgba(74,124,240,0.6)',
-  strokeWidth: 2,
-}
+// Approximate rendered node dimensions — must roughly match the actual
+// SystemNode component size so Dagre reserves the correct space.
+const NODE_WIDTH = 190
+const NODE_HEIGHT = 56
 
 export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], edges: Edge[] } {
-  const nodes: Node[] = []
-  const edges: Edge[] = []
+  const rawNodes: Node[] = []
+  const rawEdges: Edge[] = []
 
   const services = blueprint.services || []
   const users = blueprint.users || []
 
-  // ── Layer Y positions ─────────────────────────────────────────────
-  const Y = {
-    users:      80,
-    auth:       220,
-    core:       380,
-    business:   380,
-    support:    520,
-    database:   660,
-    integration: 660,
-  }
-
   // ── USER NODES ────────────────────────────────────────────────────
-  const userCount = Math.min(users.length, 6)
-  const userSpacing = Math.max(200, Math.min(240, 1400 / (userCount + 1)))
-  const userStartX = (1400 - (userCount - 1) * userSpacing) / 2
-
-  users.slice(0, 6).forEach((user, i) => {
+  const usersToShow = users.slice(0, 7)
+  usersToShow.forEach((user, i) => {
     const id = `user-${i}`
-    nodes.push({
+    rawNodes.push({
       id,
       type: 'systemNode',
-      position: { x: userStartX + i * userSpacing, y: Y.users },
+      position: { x: 0, y: 0 }, // overwritten by Dagre below
       data: {
         id,
         label: user.name,
@@ -59,10 +46,10 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
   )
 
   const authId = 'auth-service'
-  nodes.push({
+  rawNodes.push({
     id: authId,
     type: 'systemNode',
-    position: { x: 530, y: Y.auth },
+    position: { x: 0, y: 0 },
     data: {
       id: authId,
       label: authService?.name || 'Auth Service',
@@ -74,14 +61,13 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
   })
 
   // Connect all users to auth
-  users.slice(0, 6).forEach((_, i) => {
-    edges.push({
+  usersToShow.forEach((_, i) => {
+    rawEdges.push({
       id: `user-${i}-to-auth`,
       source: `user-${i}`,
       target: authId,
       style: EDGE_STYLE,
       type: 'smoothstep',
-      animated: false,
     })
   })
 
@@ -91,12 +77,7 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
   const businessServices = otherServices.filter(s => s.group === 'Business Services')
   const supportServices = otherServices.filter(s => s.group === 'Support Services')
 
-  // Combine core + business in same row, support below
   const mainServices = [...coreServices, ...businessServices]
-  const mainCount = mainServices.length
-  const mainSpacing = Math.max(210, Math.min(260, 1400 / (mainCount + 1)))
-  const mainStartX = (1400 - (mainCount - 1) * mainSpacing) / 2
-
   const serviceIdMap: Record<string, string> = {}
   if (authService) serviceIdMap[authService.name] = authId
 
@@ -104,10 +85,10 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
     const id = `service-${i}`
     serviceIdMap[svc.name] = id
     const layer: NodeLayer = svc.group === 'Core Services' ? 'core-service' : 'business-service'
-    nodes.push({
+    rawNodes.push({
       id,
       type: 'systemNode',
-      position: { x: mainStartX + i * mainSpacing, y: Y.core },
+      position: { x: 0, y: 0 },
       data: {
         id,
         label: svc.name,
@@ -117,8 +98,7 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
         children: [],
       } as GraphNodeData,
     })
-    // Connect from auth
-    edges.push({
+    rawEdges.push({
       id: `auth-to-${id}`,
       source: authId,
       target: id,
@@ -128,17 +108,13 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
   })
 
   // Support services
-  const suppCount = supportServices.length
-  const suppSpacing = Math.max(180, Math.min(220, 1100 / (suppCount + 1)))
-  const suppStartX = (1200 - (suppCount - 1) * suppSpacing) / 2
-
   supportServices.forEach((svc, i) => {
     const id = `support-${i}`
     serviceIdMap[svc.name] = id
-    nodes.push({
+    rawNodes.push({
       id,
       type: 'systemNode',
-      position: { x: suppStartX + i * suppSpacing, y: Y.support },
+      position: { x: 0, y: 0 },
       data: {
         id,
         label: svc.name,
@@ -148,11 +124,10 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
         children: [],
       } as GraphNodeData,
     })
-    // Connect from nearest main service
     const parentId = mainServices.length > 0
-      ? serviceIdMap[mainServices[Math.floor(i * mainServices.length / Math.max(suppCount, 1))]?.name] || `service-0`
+      ? serviceIdMap[mainServices[Math.floor(i * mainServices.length / Math.max(supportServices.length, 1))]?.name] || `service-0`
       : authId
-    edges.push({
+    rawEdges.push({
       id: `main-to-${id}`,
       source: parentId,
       target: id,
@@ -161,33 +136,13 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
     })
   })
 
-  // Service dependencies
-  services.forEach(svc => {
-    const srcId = serviceIdMap[svc.name]
-    if (!srcId) return
-    ;(svc.dependencies || []).forEach(dep => {
-      const tgtId = serviceIdMap[dep]
-      if (!tgtId || tgtId === srcId) return
-      const edgeId = `dep-${srcId}-${tgtId}`
-      if (!edges.find(e => e.id === edgeId)) {
-        edges.push({
-          id: edgeId,
-          source: srcId,
-          target: tgtId,
-          style: { stroke: 'rgba(255,255,255,0.08)', strokeWidth: 1, strokeDasharray: '4 3' },
-          type: 'smoothstep',
-        })
-      }
-    })
-  })
-
   // ── DATABASE NODE ─────────────────────────────────────────────────
   const dbId = 'database'
   const dbLabel = blueprint.data_layer?.database || 'Database'
-  nodes.push({
+  rawNodes.push({
     id: dbId,
     type: 'systemNode',
-    position: { x: 380, y: Y.database },
+    position: { x: 0, y: 0 },
     data: {
       id: dbId,
       label: dbLabel,
@@ -197,9 +152,8 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
     } as GraphNodeData,
   })
 
-  // Connect all main services to database
   mainServices.forEach((_, i) => {
-    edges.push({
+    rawEdges.push({
       id: `service-${i}-to-db`,
       source: `service-${i}`,
       target: dbId,
@@ -209,13 +163,13 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
   })
 
   // ── INTEGRATION NODES ─────────────────────────────────────────────
-  const integrations = (blueprint.integrations || []).slice(0, 4)
+  const integrations = (blueprint.integrations || []).slice(0, 6)
   integrations.forEach((int, i) => {
     const id = `integration-${i}`
-    nodes.push({
+    rawNodes.push({
       id,
       type: 'systemNode',
-      position: { x: 700 + i * 160, y: Y.integration },
+      position: { x: 0, y: 0 },
       data: {
         id,
         label: int.name,
@@ -225,10 +179,9 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
         children: [],
       } as GraphNodeData,
     })
-    // Connect from nearest service
     const srcIdx = Math.min(i, mainServices.length - 1)
     const srcId = mainServices.length > 0 ? `service-${srcIdx}` : authId
-    edges.push({
+    rawEdges.push({
       id: `service-to-${id}`,
       source: srcId,
       target: id,
@@ -237,7 +190,70 @@ export function buildGraphFromBlueprint(blueprint: Blueprint): { nodes: Node[], 
     })
   })
 
-  return { nodes, edges }
+  // ── DEPENDENCY EDGES ───────────────────────────────────────────────
+  // Built after layout so we can skip same-rank edges that cause stub artifacts.
+  // We compute ranks first via a quick Dagre pass, then add dependency edges
+  // only between different ranks.
+
+  // ── DAGRE AUTO-LAYOUT ──────────────────────────────────────────────
+  const g = new dagre.graphlib.Graph()
+  g.setGraph({
+    rankdir: 'TB',      // top to bottom
+    align: 'UL',
+    nodesep: 50,         // horizontal gap between nodes in the same row
+    ranksep: 110,        // vertical gap between rows
+    edgesep: 20,
+    marginx: 40,
+    marginy: 40,
+  })
+  g.setDefaultEdgeLabel(() => ({}))
+
+  rawNodes.forEach(n => {
+    g.setNode(n.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
+  })
+  rawEdges.forEach(e => {
+    g.setEdge(e.source, e.target)
+  })
+
+  dagre.layout(g)
+
+  // Apply computed positions back onto the nodes
+  const nodes: Node[] = rawNodes.map(n => {
+    const pos = g.node(n.id)
+    return {
+      ...n,
+      position: {
+        x: pos.x - NODE_WIDTH / 2,
+        y: pos.y - NODE_HEIGHT / 2,
+      },
+    }
+  })
+
+  // ── Service dependency edges (added after layout, skip same-rank) ──
+  const nodeYMap: Record<string, number> = {}
+  nodes.forEach(n => { nodeYMap[n.id] = n.position.y })
+
+  services.forEach(svc => {
+    const srcId = serviceIdMap[svc.name]
+    if (!srcId) return
+    ;(svc.dependencies || []).forEach(dep => {
+      const tgtId = serviceIdMap[dep]
+      if (!tgtId || tgtId === srcId) return
+      if (nodeYMap[srcId] === nodeYMap[tgtId]) return // skip same-row, avoids stub artifacts
+      const edgeId = `dep-${srcId}-${tgtId}`
+      if (!rawEdges.find(e => e.id === edgeId)) {
+        rawEdges.push({
+          id: edgeId,
+          source: srcId,
+          target: tgtId,
+          style: { stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '4 3' },
+          type: 'default',
+        })
+      }
+    })
+  })
+
+  return { nodes, edges: rawEdges }
 }
 
 export function highlightNodeEdges(

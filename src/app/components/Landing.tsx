@@ -232,13 +232,13 @@ export function Landing({ onSubmit, onViewHistory }: LandingProps) {
               History
             </button>
           )}
-          <a href="#" className="text-[13px] transition-colors"
+          <a href="/docs" className="text-[13px] transition-colors"
             style={{ color: 'rgba(255,255,255,0.4)' }}
             onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.8)')}
             onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.4)')}>
             Docs
           </a>
-          <a href="https://github.com" target="_blank" rel="noreferrer"
+          <a href="https://github.com/ursulapaul-tpm/cornea-ai-frontend" target="_blank" rel="noreferrer"
             className="text-[13px] transition-colors"
             style={{ color: 'rgba(255,255,255,0.4)' }}
             onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.8)')}

@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { getDeviceId } from '../utils/deviceId'
+import { track } from '@vercel/analytics'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000'
 
@@ -9,7 +10,8 @@ const ROLES = [
   'Product Owner',
   'Software Engineer',
   'Solutions Architect',
-  'Other',
+  'Founder',
+  'Other'
 ]
 
 export function FeedbackWidget() {
@@ -48,6 +50,7 @@ export function FeedbackWidget() {
         throw new Error(err.error || 'Could not submit feedback.')
       }
       setDone(true)
+      track('feedback_submitted', { role: finalRole || 'unknown', rating: rating || 0 })
       setTimeout(() => {
         setOpen(false)
         setDone(false)

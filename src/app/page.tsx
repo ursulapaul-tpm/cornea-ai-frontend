@@ -8,6 +8,7 @@ import { FeedbackWidget } from './components/FeedbackWidget'
 import { SystemCanvas } from './components/graph/SystemCanvas'
 import { Blueprint, AppScreen } from './types'
 import { getDeviceId } from './utils/deviceId'
+import { track } from '@vercel/analytics'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000'
 
@@ -46,6 +47,7 @@ export default function Home() {
     es.addEventListener('progress', (e: MessageEvent) => {
       try {
         const data = JSON.parse(e.data)
+        // agentIndex is 1-based from the backend; activeAgent in the UI is 0-based
         if (data.status === 'running') {
           setActiveAgent(data.agentIndex - 1)
         }
@@ -53,6 +55,7 @@ export default function Home() {
           setHighlights(prev => [...prev, ...data.highlights])
         }
       } catch {
+        // ignore malformed progress events
       }
     })
 
@@ -62,6 +65,13 @@ export default function Home() {
         setActiveAgent(5)
         setBlueprint(data)
 
+        // Track successful blueprint generation
+        track('blueprint_generated', {
+          userCount: data.users?.length || 0,
+          serviceCount: data.services?.length || 0,
+        })
+
+        // Auto-save to history — fire and forget
         const deviceId = getDeviceId()
         fetch(`${BACKEND_URL}/api/history/save`, {
           method: 'POST',
@@ -83,6 +93,7 @@ export default function Home() {
         const data = JSON.parse((e as any).data)
         if (data?.error) message = data.error
       } catch {
+        // EventSource native error (connection lost) has no JSON data
         message = 'Could not reach the backend. Make sure cornea.ai API is running.'
       }
       setError(message)

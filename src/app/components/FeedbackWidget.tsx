@@ -4,8 +4,18 @@ import { getDeviceId } from '../utils/deviceId'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000'
 
+const ROLES = [
+  'Product Manager / Technical PM',
+  'Product Owner',
+  'Software Engineer',
+  'Solutions Architect',
+  'Other',
+]
+
 export function FeedbackWidget() {
   const [open, setOpen] = useState(false)
+  const [role, setRole] = useState<string | null>(null)
+  const [otherRole, setOtherRole] = useState('')
   const [rating, setRating] = useState<number | null>(null)
   const [message, setMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -21,6 +31,7 @@ export function FeedbackWidget() {
     setError(null)
     try {
       const deviceId = getDeviceId()
+      const finalRole = role === 'Other' ? (otherRole.trim() || 'Other') : role
       const res = await fetch(`${BACKEND_URL}/api/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -28,6 +39,7 @@ export function FeedbackWidget() {
           deviceId,
           rating,
           message: message.trim(),
+          role: finalRole,
           pageContext: typeof window !== 'undefined' ? window.location.pathname : '',
         }),
       })
@@ -39,6 +51,8 @@ export function FeedbackWidget() {
       setTimeout(() => {
         setOpen(false)
         setDone(false)
+        setRole(null)
+        setOtherRole('')
         setRating(null)
         setMessage('')
       }, 1800)
@@ -104,6 +118,39 @@ export function FeedbackWidget() {
                 </div>
 
                 <div className="px-6 py-5">
+                  <p className="text-[12px] mb-2" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                    What's your role?
+                  </p>
+                  <div className="flex flex-col gap-1.5 mb-5">
+                    {ROLES.map(r => (
+                      <button
+                        key={r}
+                        onClick={() => setRole(r)}
+                        className="text-left px-3.5 py-2.5 rounded-xl text-[13px] transition-all"
+                        style={{
+                          background: role === r ? 'rgba(74,124,240,0.15)' : 'rgba(255,255,255,0.04)',
+                          border: `1px solid ${role === r ? 'rgba(74,124,240,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                          color: role === r ? '#a8c0f8' : 'rgba(255,255,255,0.6)',
+                        }}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+
+                  {role === 'Other' && (
+                    <input
+                      type="text"
+                      autoFocus
+                      placeholder="Tell us your role"
+                      value={otherRole}
+                      onChange={e => setOtherRole(e.target.value)}
+                      maxLength={60}
+                      className="w-full px-3.5 py-2.5 rounded-xl text-[13px] outline-none mb-5"
+                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.85)' }}
+                    />
+                  )}
+
                   <p className="text-[12px] mb-3" style={{ color: 'rgba(255,255,255,0.4)' }}>
                     How was your experience?
                   </p>

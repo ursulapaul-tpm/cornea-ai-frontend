@@ -40,8 +40,14 @@ interface ChangelogEntry {
   date: string
   changes: string[]
 }
-
 const CHANGELOG: ChangelogEntry[] = [
+  {
+    version: 'v1.2',
+    date: 'June 26, 2026',
+    changes: [
+      'Added rate limiting (5 generations per hour per IP) to protect against abuse and control API costs',
+    ],
+  },
   {
     version: 'v1.1',
     date: 'June 25, 2026',
